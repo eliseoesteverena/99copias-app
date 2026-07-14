@@ -46,7 +46,18 @@ async function validarFirma(request, env, dataId) {
   const v1 = parts.v1;
   if (!ts || !v1) return { valida: false, motivo: 'header_x_signature_mal_formado' };
 
-  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+  // 1. Convertir dataId a minúsculas de forma segura si tiene letras (Regla de la Doc oficial)
+  const safeDataId = dataId ? String(dataId).toLowerCase() : '';
+
+  // 2. Construcción dinámica del manifest omitiendo campos vacíos (Regla de la Doc oficial)
+  let manifest = '';
+  if (safeDataId) {
+    manifest += `id:${safeDataId};`;
+  }
+  if (xRequestId) {
+    manifest += `request-id:${xRequestId};`;
+  }
+  manifest += `ts:${ts};`;
 
   const key = await crypto.subtle.importKey(
     'raw',
@@ -74,9 +85,19 @@ export async function onRequestPost({ request, env }) {
   }
 
   const tipo = body.type || body.topic;
-  const dataId = body.data && body.data.id;
+  
+  // 3. Extraer el dataId de forma segura si viene en formato antiguo (topic/resource) o nuevo (action/data.id)
+  let dataId = null;
+  if (body.data && body.data.id) {
+    dataId = body.data.id;
+  } else if (body.resource) {
+    // Si resource es una URL (ej: https://api.mercadolibre.com/payments/168800204850), extraemos el ID
+    const match = String(body.resource).match(/\d+/);
+    dataId = match ? match[0] : null;
+  }
 
-  if (tipo !== 'payment' || !dataId) {
+  // Aceptamos tanto "payment" como "payment.created"
+  if ((tipo !== 'payment' && tipo !== 'payment.created') || !dataId) {
     await log(env, { resultado: 'ignorado_no_es_payment', tipo, dataId, xSignature: xSignatureHeader, bodyCrudo: rawText });
     return new Response('OK', { status: 200 });
   }
@@ -93,7 +114,7 @@ export async function onRequestPost({ request, env }) {
   if (!env.MP_ACCESS_TOKEN) {
     await log(env, {
       resultado: 'sin_access_token', tipo, dataId, xSignature: xSignatureHeader,
-      detalle: 'MP_ACCESS_TOKEN no está cargado en este entorno (revisar Production vs Preview)', bodyCrudo: rawText,
+      detalle: 'MP_ACCESS_TOKEN no está cargado', bodyCrudo: rawText,
     });
     return new Response('OK', { status: 200 });
   }
