@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pedido de impresión</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="brand">IMPRENTA<span>·</span>PEDIDOS</div>
+    <div class="doc-id mono" id="docId">HOJA DE PEDIDO — S/N</div>
+  </header>
+
+  <nav class="stepline" id="stepline">
+    <div class="tick is-active" data-step="1"><span class="n">01</span><span class="lbl">Zona</span></div>
+    <div class="tick" data-step="2"><span class="n">02</span><span class="lbl">Archivos</span></div>
+    <div class="tick" data-step="3"><span class="n">03</span><span class="lbl">Turno</span></div>
+    <div class="tick" data-step="4"><span class="n">04</span><span class="lbl">Datos</span></div>
+    <div class="tick" data-step="5"><span class="n">05</span><span class="lbl">Pago</span></div>
+  </nav>
+
+  <!-- ================= PASO 1 · ZONA DE ENTREGA ================= -->
+  <section class="panel is-active" id="panel-1">
+    <div class="panel-head">
+      <h2>¿A qué zona entregamos?</h2>
+      <p class="sub">Elegí tu zona para mostrarte los turnos de entrega disponibles. La recordamos para tu próximo pedido.</p>
+    </div>
+    <div id="zoneAlert" class="alert alert-error" style="display:none;"></div>
+    <div class="zone-grid" id="zoneGrid">
+      <div class="empty">Cargando zonas…</div>
+    </div>
+  </section>
+
+  <!-- ================= PASO 2 · ARCHIVOS ================= -->
+  <section class="panel" id="panel-2">
+    <div class="panel-head">
+      <h2>Cargá tus archivos</h2>
+      <p class="sub">Aceptamos PDF e imágenes. Configurá copias, rango de páginas y acabado para cada uno.</p>
+    </div>
+
+    <div class="alert alert-error" id="rejectedAlert" style="display:none;"></div>
+
+    <div id="dzWrap">
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" multiple accept="application/pdf,image/*">
+        <span class="dz-title">Arrastrá y soltá tus archivos</span>
+        <span class="dz-or mono">ó</span>
+        <span class="btn btn-outline btn-sm">Seleccioná tus archivos</span>
+        <span class="dz-list">Se aceptan PDF e imágenes (JPG, PNG)</span>
+      </label>
+    </div>
+
+    <div id="loadedWrap" style="display:none;">
+      <div class="plate" style="margin-bottom:1rem;">
+        <div class="eyebrow" style="margin-bottom:.6rem;">Configuración global</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Copias por archivo</label>
+            <input class="input" type="number" min="1" value="1" id="gCopias">
+          </div>
+          <div class="field">
+            <label>Acabado</label>
+            <div class="segmented accent" id="gAcabado">
+              <button type="button" class="is-on" data-value="suelto">Suelto</button>
+              <button type="button" data-value="abrochado">Abrochado</button>
+              <button type="button" data-value="anillado">Anillado</button>
+              <button type="button" data-value="clip">Clip</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Faz</label>
+            <div class="segmented" id="gFaz">
+              <button type="button" class="is-on" data-value="simple">Simple</button>
+              <button type="button" data-value="doble">Doble</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button type="button" class="btn btn-outline btn-sm" id="btnApplyAll">Aplicar a todos los archivos</button>
+          </div>
+        </div>
+      </div>
+
+      <label class="dropzone" id="dropzoneMore" style="padding:1.25rem; margin-bottom:1rem;">
+        <input type="file" id="fileInputMore" multiple accept="application/pdf,image/*">
+        <span class="dz-title" style="font-size:.9rem;">+ Agregar más archivos</span>
+      </label>
+
+      <div class="file-scroll" id="fileList"></div>
+    </div>
+  </section>
+
+  <!-- ================= PASO 3 · TURNO ================= -->
+  <section class="panel" id="panel-3">
+    <div class="panel-head">
+      <h2>Elegí día y horario de entrega</h2>
+      <p class="sub" id="turnoZonaLabel">Turnos disponibles para tu zona.</p>
+    </div>
+    <div class="date-picker" id="datePicker"></div>
+    <div class="slot-grid" id="slotGrid">
+      <div class="empty">Elegí una fecha para ver los turnos.</div>
+    </div>
+  </section>
+
+  <!-- ================= PASO 4 · DATOS DEL CLIENTE ================= -->
+  <section class="panel" id="panel-4">
+    <div class="panel-head">
+      <h2>Tus datos</h2>
+      <p class="sub">Los necesitamos para emitir el comprobante y coordinar la entrega.</p>
+    </div>
+    <div class="plate">
+      <div class="form-grid">
+        <div class="field"><label for="cNombre">Nombre</label><input class="input" id="cNombre"></div>
+        <div class="field"><label for="cApellido">Apellido</label><input class="input" id="cApellido"></div>
+        <div class="field">
+          <label for="cDocTipo">Tipo de documento</label>
+          <select class="select" id="cDocTipo">
+            <option value="dni">DNI</option>
+            <option value="cuit">CUIT</option>
+          </select>
+        </div>
+        <div class="field"><label for="cDocNumero">Número de documento</label><input class="input" id="cDocNumero"></div>
+        <div class="field"><label for="cEmail">Correo electrónico</label><input class="input" type="email" id="cEmail"></div>
+        <div class="field"><label for="cCelular">Celular</label><input class="input" id="cCelular" placeholder="+54 9 ..."></div>
+      </div>
+
+      <div class="field span-2" style="margin-top:1.25rem;">
+        <label class="checkline">
+          <input type="checkbox" id="cDireccionDistinta">
+          Entregar en una dirección distinta a la mía
+        </label>
+      </div>
+
+      <div class="form-grid" style="margin-top:.75rem;">
+        <div class="field span-2">
+          <label for="cDireccion" id="lblDireccion">Dirección</label>
+          <input class="input" id="cDireccion" placeholder="Calle, número, piso/depto, referencias">
+        </div>
+        <div class="field span-2" id="wrapDireccionEntrega" style="display:none;">
+          <label for="cDireccionEntrega">Dirección de entrega</label>
+          <input class="input" id="cDireccionEntrega" placeholder="Calle, número, piso/depto, referencias">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PASO 5 · PAGO ================= -->
+  <section class="panel" id="panel-5">
+    <div class="panel-head">
+      <h2>Revisá y pagá</h2>
+      <p class="sub">Verificá el detalle de tu pedido antes de ir al checkout de Mercado Pago.</p>
+    </div>
+
+    <div class="receipt" id="finalReceipt">
+      <div class="receipt-head">
+        <h3>Resumen del pedido</h3>
+        <span class="id mono" id="finalCount">0 archivos</span>
+      </div>
+      <div id="finalBody"></div>
+      <div class="receipt-total">
+        <span class="label">Total a pagar</span>
+        <span class="amount" id="finalTotal">$0</span>
+      </div>
+    </div>
+
+    <div class="alert alert-info" style="margin-top:1.25rem;" id="payHint">
+      Al confirmar, el precio se recalcula en el servidor y se genera el checkout de Mercado Pago.
+    </div>
+    <div class="alert alert-error" id="payError" style="display:none;"></div>
+
+    <button type="button" class="btn btn-primary btn-block" id="btnPagar" style="margin-top:1rem; padding:.9rem;">
+      Ir a pagar con Mercado Pago →
+    </button>
+  </section>
+
+</div>
+
+<!-- ================= NAV INFERIOR ================= -->
+<div class="wizard-nav">
+  <button type="button" class="btn btn-ghost" id="btnBack">← Atrás</button>
+  <span class="price-peek" id="pricePeek"></span>
+  <button type="button" class="btn btn-primary" id="btnNext">Continuar →</button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
