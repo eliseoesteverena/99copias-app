@@ -9,13 +9,32 @@
 //  4) Actualizamos `pagos` y, si está aprobado, `trabajos.pagado` + `trabajos.estado`.
 //  5) Respondemos 200 siempre que hayamos podido procesar (o descartar) el evento,
 //     para que MP no reintente indefinidamente.
+//
+// DEBUG: cada notificación que llega queda registrada en `webhook_logs`
+// (ver migracion_webhook_logs.sql) con el motivo exacto de qué pasó. Sirve para
+// diagnosticar sin depender de los logs en vivo de Cloudflare. Se puede sacar
+// más adelante una vez que el flujo esté estable, no es necesario para producción.
+
+async function log(env, { resultado, tipo, dataId, trabajoId, xSignature, detalle, bodyCrudo }) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO webhook_logs (resultado, tipo, data_id, trabajo_id, x_signature, detalle, body_crudo)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      resultado, tipo || null, dataId ? String(dataId) : null, trabajoId ? String(trabajoId) : null,
+      xSignature || null, detalle || null, bodyCrudo || null
+    ).run();
+  } catch (e) {
+    console.error('No se pudo escribir webhook_logs (¿corriste la migración?):', e);
+  }
+}
 
 async function validarFirma(request, env, dataId) {
-  if (!env.MP_WEBHOOK_SECRET) return true; // sin secreto configurado, no se valida (ver README)
+  if (!env.MP_WEBHOOK_SECRET) return { valida: true, motivo: 'sin_secreto_configurado' };
 
   const xSignature = request.headers.get('x-signature') || '';
   const xRequestId = request.headers.get('x-request-id') || '';
-  if (!xSignature) return false;
+  if (!xSignature) return { valida: false, motivo: 'sin_header_x_signature' };
 
   const parts = Object.fromEntries(
     xSignature.split(',').map(p => {
@@ -25,7 +44,7 @@ async function validarFirma(request, env, dataId) {
   );
   const ts = parts.ts;
   const v1 = parts.v1;
-  if (!ts || !v1) return false;
+  if (!ts || !v1) return { valida: false, motivo: 'header_x_signature_mal_formado' };
 
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
 
@@ -39,33 +58,43 @@ async function validarFirma(request, env, dataId) {
   const sigBuffer = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(manifest));
   const hex = [...new Uint8Array(sigBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
 
-  return hex === v1;
+  return { valida: hex === v1, motivo: hex === v1 ? 'firma_ok' : 'firma_no_coincide' };
 }
 
 export async function onRequestPost({ request, env }) {
+  const xSignatureHeader = request.headers.get('x-signature') || '';
+  const rawText = await request.text();
+
   let body;
   try {
-    body = await request.json();
+    body = JSON.parse(rawText);
   } catch {
-    return new Response('OK', { status: 200 }); // body inválido: no reintentar, no hay nada que procesar
+    await log(env, { resultado: 'body_invalido', xSignature: xSignatureHeader, bodyCrudo: rawText });
+    return new Response('OK', { status: 200 });
   }
 
   const tipo = body.type || body.topic;
   const dataId = body.data && body.data.id;
 
-  // Solo nos interesan las notificaciones de pagos.
   if (tipo !== 'payment' || !dataId) {
+    await log(env, { resultado: 'ignorado_no_es_payment', tipo, dataId, xSignature: xSignatureHeader, bodyCrudo: rawText });
     return new Response('OK', { status: 200 });
   }
 
-  const firmaValida = await validarFirma(request, env, dataId);
+  const { valida: firmaValida, motivo: motivoFirma } = await validarFirma(request, env, dataId);
   if (!firmaValida) {
-    console.error('Firma de webhook inválida, se descarta la notificación.');
-    return new Response('OK', { status: 200 }); // no reintentar: probablemente no es de MP
+    await log(env, {
+      resultado: 'firma_invalida', tipo, dataId, xSignature: xSignatureHeader,
+      detalle: motivoFirma, bodyCrudo: rawText,
+    });
+    return new Response('OK', { status: 200 });
   }
 
   if (!env.MP_ACCESS_TOKEN) {
-    console.error('MP_ACCESS_TOKEN no configurado, no se puede verificar el pago', dataId);
+    await log(env, {
+      resultado: 'sin_access_token', tipo, dataId, xSignature: xSignatureHeader,
+      detalle: 'MP_ACCESS_TOKEN no está cargado en este entorno (revisar Production vs Preview)', bodyCrudo: rawText,
+    });
     return new Response('OK', { status: 200 });
   }
 
@@ -74,14 +103,18 @@ export async function onRequestPost({ request, env }) {
       headers: { 'Authorization': 'Bearer ' + env.MP_ACCESS_TOKEN },
     });
     if (!pagoRes.ok) {
-      console.error('No se pudo obtener el pago', dataId, await pagoRes.text());
+      const detalle = await pagoRes.text();
+      await log(env, {
+        resultado: 'error_consultando_pago', tipo, dataId, xSignature: xSignatureHeader,
+        detalle: `HTTP ${pagoRes.status}: ${detalle}`, bodyCrudo: rawText,
+      });
       return new Response('OK', { status: 200 });
     }
     const pago = await pagoRes.json();
     const trabajoId = pago.external_reference;
     const db = env.DB;
 
-    await db.prepare(
+    const update = await db.prepare(
       `UPDATE pagos SET mp_payment_id = ?, mp_status = ?, mp_status_detail = ?, mp_payment_type = ?,
               raw_response = ?, actualizado_en = datetime('now')
        WHERE trabajo_id = ?`
@@ -90,6 +123,16 @@ export async function onRequestPost({ request, env }) {
       JSON.stringify(pago), trabajoId
     ).run();
 
+    if (update.meta.changes === 0) {
+      // El pago se pudo consultar, pero no hay ninguna fila en `pagos` con ese trabajo_id.
+      await log(env, {
+        resultado: 'pagos_sin_fila_para_ese_trabajo_id', tipo, dataId, trabajoId, xSignature: xSignatureHeader,
+        detalle: `external_reference recibido: "${trabajoId}" — no matcheó ninguna fila en pagos.trabajo_id`,
+        bodyCrudo: rawText,
+      });
+      return new Response('OK', { status: 200 });
+    }
+
     if (pago.status === 'approved') {
       await db.prepare(
         `UPDATE trabajos SET pagado = 1, estado = CASE WHEN estado = 'pendiente' THEN 'en_proceso' ELSE estado END
@@ -97,12 +140,16 @@ export async function onRequestPost({ request, env }) {
       ).bind(trabajoId).run();
     }
 
+    await log(env, {
+      resultado: 'actualizado_ok', tipo, dataId, trabajoId, xSignature: xSignatureHeader,
+      detalle: `status=${pago.status}`, bodyCrudo: rawText,
+    });
     return new Response('OK', { status: 200 });
   } catch (err) {
-    console.error('Error procesando webhook de Mercado Pago:', err);
-    // Devolvemos 200 igual: si es un error transitorio nuestro, MP reintentará solo
-    // si respondemos distinto de 200/201, pero preferimos loguear y revisar manualmente
-    // antes que generar reintentos descontrolados. Ajustar si se prefiere lo contrario.
+    await log(env, {
+      resultado: 'excepcion', tipo, dataId, xSignature: xSignatureHeader,
+      detalle: String(err && err.message || err), bodyCrudo: rawText,
+    });
     return new Response('OK', { status: 200 });
   }
 }
