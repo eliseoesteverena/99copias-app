@@ -1,9 +1,9 @@
-// NOTA: este endpoint queda funcional en su estructura, pero necesita:
-//   1) La variable de entorno MP_ACCESS_TOKEN cargada en Cloudflare Pages (Settings > Environment variables).
-//   2) Definir back_urls (success/failure/pending) con el dominio final.
-//   3) Configurar el webhook de Mercado Pago apuntando a /api/webhooks/mercadopago (a construir en la
-//      siguiente etapa), que es el que va a actualizar `pagos` y `trabajos.pagado`.
-// Hasta que eso esté cargado, este endpoint responde con un error claro en vez de fallar en silencio.
+// NOTA: este endpoint necesita la variable de entorno MP_ACCESS_TOKEN cargada en
+// Cloudflare Pages (Settings > Environment variables). El webhook que confirma el pago
+// real está en functions/api/webhooks/mercadopago.js. Las back_urls vuelven al mismo
+// index.html con ?estado=aprobado|rechazado|pendiente, que se resuelve todo en el
+// propio wizard (ver panel-resultado en index.html / app.js).
+// Hasta que MP_ACCESS_TOKEN esté cargado, este endpoint responde con un error claro en vez de fallar en silencio.
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -30,9 +30,9 @@ export async function onRequestPost({ request, env }) {
       }],
       external_reference: String(trabajo_id),
       back_urls: {
-        success: origin + '/pedido/gracias?trabajo=' + trabajo_id,
-        failure: origin + '/pedido/error?trabajo=' + trabajo_id,
-        pending: origin + '/pedido/pendiente?trabajo=' + trabajo_id,
+        success: origin + '/?estado=aprobado&trabajo=' + trabajo_id,
+        failure: origin + '/?estado=rechazado&trabajo=' + trabajo_id,
+        pending: origin + '/?estado=pendiente&trabajo=' + trabajo_id,
       },
       auto_return: 'approved',
       notification_url: origin + '/api/webhooks/mercadopago',

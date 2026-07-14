@@ -522,7 +522,14 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     const { init_point } = await apiPost('/api/checkout', { trabajo_id });
 
     localStorage.setItem(LS_CLIENTE, JSON.stringify(payload.cliente));
-    window.location.href = init_point;
+
+    // No redirigimos directo: en desktop es común no estar logueado en MP.
+    // Mostramos QR (para pagar desde el celular) + link para seguir en la misma pestaña.
+    document.getElementById('payQr').src =
+      'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' + encodeURIComponent(init_point);
+    document.getElementById('payLink').href = init_point;
+    document.getElementById('payLaunch').style.display = 'block';
+    btn.style.display = 'none';
   } catch (err) {
     console.error(err);
     errEl.textContent = 'No pudimos generar el checkout. Intentá de nuevo en unos segundos.';
@@ -595,9 +602,55 @@ document.getElementById('btnBack').addEventListener('click', () => {
 });
 
 /* =========================================================
+   RESULTADO DEL PAGO (vuelta desde Mercado Pago, mismo index.html)
+   ========================================================= */
+const RESULTADOS = {
+  aprobado: {
+    eyebrow: 'PAGO APROBADO',
+    titulo: '¡Listo! Tu pedido está confirmado',
+    texto: 'Ya registramos el pago y tu pedido pasó a producción. Te vamos a avisar cuando esté en camino.',
+  },
+  rechazado: {
+    eyebrow: 'PAGO RECHAZADO',
+    titulo: 'No pudimos procesar el pago',
+    texto: 'Mercado Pago rechazó el pago. Podés intentar de nuevo con otro medio de pago desde un nuevo pedido.',
+  },
+  pendiente: {
+    eyebrow: 'PAGO PENDIENTE',
+    titulo: 'Tu pago está en revisión',
+    texto: 'Esto puede pasar con algunos medios de pago (ej. efectivo o transferencia). Te confirmamos por mail o WhatsApp apenas se acredite.',
+  },
+};
+
+function mostrarResultadoSiCorresponde() {
+  const params = new URLSearchParams(window.location.search);
+  const estado = params.get('estado');
+  if (!estado || !RESULTADOS[estado]) return false;
+
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('is-active'));
+  document.getElementById('stepline').style.display = 'none';
+  document.querySelector('.wizard-nav').style.display = 'none';
+
+  const r = RESULTADOS[estado];
+  document.getElementById('resultadoEyebrow').textContent = r.eyebrow;
+  document.getElementById('resultadoTitulo').textContent = r.titulo;
+  document.getElementById('resultadoTexto').textContent = r.texto;
+  const trabajoId = params.get('trabajo');
+  document.getElementById('resultadoTrabajo').textContent = trabajoId ? 'PEDIDO #' + trabajoId : '';
+  document.getElementById('panel-resultado').classList.add('is-active');
+  return true;
+}
+
+document.getElementById('btnNuevoPedido').addEventListener('click', () => {
+  window.location.href = window.location.origin + window.location.pathname;
+});
+
+/* =========================================================
    INIT
    ========================================================= */
 (async function init() {
+  if (mostrarResultadoSiCorresponde()) return; // no inicializamos el wizard en esta vista
+
   document.getElementById('docId').textContent =
     'HOJA DE PEDIDO — ' + new Date().toISOString().slice(0, 10).replaceAll('-', '.');
   await loadProductos();

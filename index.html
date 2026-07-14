@@ -181,7 +181,29 @@
     <button type="button" class="btn btn-primary btn-block" id="btnPagar" style="margin-top:1rem; padding:.9rem;">
       Ir a pagar con Mercado Pago →
     </button>
+
+    <div id="payLaunch" style="display:none; margin-top:1.25rem;">
+      <div class="plate is-focused" style="text-align:center;">
+        <div class="eyebrow" style="margin-bottom:.9rem;">Checkout listo</div>
+        <p style="font-weight:600; margin-bottom:1rem;">Escaneá el código desde tu celular para pagar sin salir de esta pantalla</p>
+        <img id="payQr" src="" alt="Código QR para pagar con Mercado Pago" width="220" height="220" style="border:1px solid var(--ink); display:block; margin:0 auto;">
+        <p class="eyebrow" style="margin-top:1rem;">— o bien —</p>
+        <a id="payLink" class="btn btn-outline" href="#" style="margin-top:.5rem;">Continuar el pago en esta pestaña →</a>
+      </div>
+    </div>
   </section>
+
+  <!-- ================= RESULTADO DEL PAGO (vuelta desde Mercado Pago) ================= -->
+  <section class="panel" id="panel-resultado">
+    <div class="plate is-focused" id="resultadoPlate" style="text-align:center; padding:2.5rem 1.5rem;">
+      <div class="eyebrow" id="resultadoEyebrow">RESULTADO</div>
+      <h2 id="resultadoTitulo" style="margin-top:.75rem; font-size:1.4rem;"></h2>
+      <p id="resultadoTexto" style="color:var(--ink-60); margin-top:.6rem; max-width:28rem; margin-left:auto; margin-right:auto;"></p>
+      <p class="mono" id="resultadoTrabajo" style="margin-top:1rem; font-size:.78rem; color:var(--ink-40);"></p>
+      <button type="button" class="btn btn-primary" id="btnNuevoPedido" style="margin-top:1.5rem;">Hacer otro pedido</button>
+    </div>
+  </section>
+
 
 </div>
 
