@@ -36,20 +36,22 @@ async function validarFirma(request, env, dataId) {
   const xRequestId = request.headers.get('x-request-id') || '';
   if (!xSignature) return { valida: false, motivo: 'sin_header_x_signature' };
 
+  // 1. Extraer ts y v1 del header
   const parts = Object.fromEntries(
     xSignature.split(',').map(p => {
       const [k, v] = p.split('=');
-      return [k.trim(), (v || '').trim()];
+      return [k ? k.trim() : '', v ? v.trim() : ''];
     })
   );
+  
   const ts = parts.ts;
   const v1 = parts.v1;
   if (!ts || !v1) return { valida: false, motivo: 'header_x_signature_mal_formado' };
 
-  // 1. Convertir dataId a minúsculas de forma segura si tiene letras (Regla de la Doc oficial)
+  // 2. Formatear dataId a minúsculas obligatoriamente si contiene letras
   const safeDataId = dataId ? String(dataId).toLowerCase() : '';
 
-  // 2. Construcción dinámica del manifest omitiendo campos vacíos (Regla de la Doc oficial)
+  // 3. Reconstruir la cadena (usando estrictamente el string del ts crudo)
   let manifest = '';
   if (safeDataId) {
     manifest += `id:${safeDataId};`;
@@ -59,6 +61,7 @@ async function validarFirma(request, env, dataId) {
   }
   manifest += `ts:${ts};`;
 
+  // 4. Calcular HMAC-SHA256
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(env.MP_WEBHOOK_SECRET),
@@ -69,7 +72,10 @@ async function validarFirma(request, env, dataId) {
   const sigBuffer = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(manifest));
   const hex = [...new Uint8Array(sigBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
 
-  return { valida: hex === v1, motivo: hex === v1 ? 'firma_ok' : 'firma_no_coincide' };
+  return { 
+    valida: hex === v1, 
+    motivo: hex === v1 ? 'firma_ok' : `firma_no_coincide_calculado_${hex}_esperado_${v1}` 
+  };
 }
 
 export async function onRequestPost({ request, env }) {
