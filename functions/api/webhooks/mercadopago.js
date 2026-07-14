@@ -122,6 +122,15 @@ async function validarFirma(request, env, dataId) {
 
 export async function onRequestPost({ request, env }) {
 
+await log(env,{
+    resultado:"00_request_url",
+    detalle:JSON.stringify({
+        url: request.url,
+        search: new URL(request.url).search,
+        params: [...new URL(request.url).searchParams.entries()]
+    })
+});
+
   const xSignatureHeader = request.headers.get('x-signature') || '';
 
   const rawText = await request.text();
