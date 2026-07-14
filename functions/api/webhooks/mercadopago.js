@@ -41,7 +41,8 @@ async function validarFirma(request, env, dataId) {
   if (!env.MP_WEBHOOK_SECRET) {
     return {
       valida: true,
-      motivo: 'sin_secreto_configurado'
+      motivo: 'sin_secreto_configurado',
+      debug: {}
     };
   }
 
@@ -51,7 +52,11 @@ async function validarFirma(request, env, dataId) {
   if (!xSignature) {
     return {
       valida: false,
-      motivo: 'sin_header_x_signature'
+      motivo: 'sin_header_x_signature',
+      debug: {
+        xSignature,
+        xRequestId
+      }
     };
   }
 
@@ -68,11 +73,15 @@ async function validarFirma(request, env, dataId) {
   if (!ts || !v1) {
     return {
       valida: false,
-      motivo: 'header_x_signature_mal_formado'
+      motivo: 'header_x_signature_mal_formado',
+      debug: {
+        xSignature,
+        parts
+      }
     };
   }
 
-  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+  const manifest = id:${dataId};request-id:${xRequestId};ts:${ts};;
 
   const key = await crypto.subtle.importKey(
     'raw',
@@ -91,13 +100,22 @@ async function validarFirma(request, env, dataId) {
     new TextEncoder().encode(manifest)
   );
 
-  const hex = [...new Uint8Array(sigBuffer)]
+  const calculada = [...new Uint8Array(sigBuffer)]
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
   return {
-    valida: hex === v1,
-    motivo: hex === v1 ? 'firma_ok' : 'firma_no_coincide'
+    valida: calculada === v1,
+    motivo: calculada === v1 ? 'firma_ok' : 'firma_no_coincide',
+    debug: {
+      manifest,
+      calculada,
+      recibida: v1,
+      ts,
+      xRequestId,
+      xSignature,
+      dataId
+    }
   };
 
 }
