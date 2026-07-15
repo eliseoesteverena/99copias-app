@@ -1,126 +1,149 @@
 // Recibe las notificaciones de Mercado Pago (Checkout Pro).
-// Configurar como notification_url al crear la preferencia (ver checkout.js).
 //
-// Flujo:
-//  1) MP hace POST acá con { type/action: "payment...", data: { id } }.
-//  2) (Opcional pero recomendado) Validamos el header x-signature con MP_WEBHOOK_SECRET.
-//  3) Buscamos el pago real con GET /v1/payments/{id} — nunca confiamos en el status
-//     que venga en el body de la notificación.
-//  4) Actualizamos `pagos` y, si está aprobado, `trabajos.pagado` + `trabajos.estado`.
-//  5) Respondemos 200 siempre que hayamos podido procesar (o descartar) el evento,
-//     para que MP no reintente indefinidamente.
+// MODO DIAGNÓSTICO: mientras se termina de validar el flujo, esta versión registra
+// en `webhook_logs` TODO lo que entra (URL completa, headers, body crudo) y todo lo
+// que se calculó (manifest, hash calculado vs esperado, qué candidato de id matcheó),
+// para poder confirmar con certeza dónde está el problema sin depender de logs en vivo.
+// Correr migracion_webhook_logs.sql + migracion_webhook_logs_v2.sql antes de usar esto.
 //
-// DEBUG: cada notificación que llega queda registrada en `webhook_logs`
-// (ver migracion_webhook_logs.sql) con el motivo exacto de qué pasó. Sirve para
-// diagnosticar sin depender de los logs en vivo de Cloudflare. Se puede sacar
-// más adelante una vez que el flujo esté estable, no es necesario para producción.
+// Referencia oficial (doc de Webhooks de Mercado Pago):
+//  - El x-signature header trae "ts=...,v1=..." donde ts es el timestamp (ms) y v1 el HMAC-SHA256.
+//  - El manifiesto a firmar es: id:{data.id};request-id:{x-request-id};ts:{ts};
+//  - El "data.id" del manifiesto es el que viene en el QUERY STRING de la notification_url
+//    (?data.id=...&type=payment), no necesariamente el del body. Si es alfanumérico va en minúsculas.
+//  - Para notificaciones "legacy" (topic=payment&resource=<id>), no hay data.id en query;
+//    el id del pago es directamente el valor de "resource".
 
-async function log(env, { resultado, tipo, dataId, trabajoId, xSignature, detalle, bodyCrudo }) {
-  try {
-    await env.DB.prepare(
-      `INSERT INTO webhook_logs (resultado, tipo, data_id, trabajo_id, x_signature, detalle, body_crudo)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      resultado, tipo || null, dataId ? String(dataId) : null, trabajoId ? String(trabajoId) : null,
-      xSignature || null, detalle || null, bodyCrudo || null
-    ).run();
-  } catch (e) {
-    console.error('No se pudo escribir webhook_logs (¿corriste la migración?):', e);
-  }
-}
-
-async function validarFirma(request, env, dataId) {
-  if (!env.MP_WEBHOOK_SECRET) return { valida: true, motivo: 'sin_secreto_configurado' };
-
-  const xSignature = request.headers.get('x-signature') || '';
-  const xRequestId = request.headers.get('x-request-id') || '';
-  if (!xSignature) return { valida: false, motivo: 'sin_header_x_signature' };
-
-  // 1. Extraer ts y v1 del header
+function parseXSignature(xSignature) {
   const parts = Object.fromEntries(
-    xSignature.split(',').map(p => {
-      const [k, v] = p.split('=');
-      return [k ? k.trim() : '', v ? v.trim() : ''];
+    (xSignature || '').split(',').map(p => {
+      const i = p.indexOf('=');
+      if (i === -1) return [p.trim(), ''];
+      return [p.slice(0, i).trim(), p.slice(i + 1).trim()];
     })
   );
-  
-  const ts = parts.ts;
-  const v1 = parts.v1;
-  if (!ts || !v1) return { valida: false, motivo: 'header_x_signature_mal_formado' };
+  return { ts: parts.ts || null, v1: parts.v1 || null };
+}
 
-  // 2. Formatear dataId a minúsculas obligatoriamente si contiene letras
-  const safeDataId = dataId ? String(dataId).toLowerCase() : '';
-
-  // 3. Reconstruir la cadena (usando estrictamente el string del ts crudo)
-  let manifest = '';
-  if (safeDataId) {
-    manifest += `id:${safeDataId};`;
-  }
-  if (xRequestId) {
-    manifest += `request-id:${xRequestId};`;
-  }
-  manifest += `ts:${ts};`;
-
-  // 4. Calcular HMAC-SHA256
+async function hmacHex(secret, manifest) {
   const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(env.MP_WEBHOOK_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   );
   const sigBuffer = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(manifest));
-  const hex = [...new Uint8Array(sigBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+  return [...new Uint8Array(sigBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-  return { 
-    valida: hex === v1, 
-    motivo: hex === v1 ? 'firma_ok' : `firma_no_coincide_calculado_${hex}_esperado_${v1}` 
-  };
+async function log(env, data) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO webhook_logs
+        (resultado, tipo, data_id, trabajo_id, x_signature, detalle, body_crudo,
+         url, metodo, headers_json, ts, x_request_id, manifest_usado, hash_calculado, hash_esperado,
+         candidatos_json, respondido_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(
+      data.resultado, data.tipo || null, data.dataId ? String(data.dataId) : null,
+      data.trabajoId ? String(data.trabajoId) : null, data.xSignature || null, data.detalle || null,
+      data.bodyCrudo || null, data.url || null, data.metodo || null, data.headersJson || null,
+      data.ts || null, data.xRequestId || null, data.manifestUsado || null,
+      data.hashCalculado || null, data.hashEsperado || null, data.candidatosJson || null
+    ).run();
+  } catch (e) {
+    console.error('No se pudo escribir webhook_logs (¿corriste las migraciones?):', e);
+  }
 }
 
 export async function onRequestPost({ request, env }) {
-  const xSignatureHeader = request.headers.get('x-signature') || '';
+  const url = new URL(request.url);
+  const headersObj = Object.fromEntries(request.headers.entries());
+  const xSignature = request.headers.get('x-signature') || '';
+  const xRequestId = request.headers.get('x-request-id') || '';
   const rawText = await request.text();
 
-  let body;
-  try {
-    body = JSON.parse(rawText);
-  } catch {
-    await log(env, { resultado: 'body_invalido', xSignature: xSignatureHeader, bodyCrudo: rawText });
-    return new Response('OK', { status: 200 });
-  }
+  const { ts, v1: hashEsperado } = parseXSignature(xSignature);
 
-  const tipo = body.type || body.topic;
-  
-  // 3. Extraer el dataId de forma segura si viene en formato antiguo (topic/resource) o nuevo (action/data.id)
-  let dataId = null;
-  if (body.data && body.data.id) {
-    dataId = body.data.id;
-  } else if (body.resource) {
-    // Si resource es una URL (ej: https://api.mercadolibre.com/payments/168800204850), extraemos el ID
-    const match = String(body.resource).match(/\d+/);
-    dataId = match ? match[0] : null;
-  }
+  let body = null;
+  try { body = JSON.parse(rawText); } catch { /* algunos topics vienen sin body JSON válido */ }
 
-  // Aceptamos tanto "payment" como "payment.created"
-  if ((tipo !== 'payment' && tipo !== 'payment.created') || !dataId) {
-    await log(env, { resultado: 'ignorado_no_es_payment', tipo, dataId, xSignature: xSignatureHeader, bodyCrudo: rawText });
-    return new Response('OK', { status: 200 });
-  }
+  // Tipo de evento: soporta formato moderno (type/action + data.id) y legacy (topic + resource).
+  const tipo = (body && (body.type || body.topic)) || url.searchParams.get('type') || url.searchParams.get('topic');
 
-  const { valida: firmaValida, motivo: motivoFirma } = await validarFirma(request, env, dataId);
-  if (!firmaValida) {
+  // Reunimos TODOS los candidatos posibles de "data.id" para saber cuál firmó realmente MP.
+  const candidatos = [];
+  const qDataId = url.searchParams.get('data.id') || url.searchParams.get('id');
+  if (qDataId) candidatos.push({ origen: 'query.data.id', id: qDataId });
+  if (body && body.data && body.data.id) candidatos.push({ origen: 'body.data.id', id: String(body.data.id) });
+  if (body && body.resource && tipo === 'payment') candidatos.push({ origen: 'body.resource', id: String(body.resource) });
+
+  const esPayment = tipo === 'payment';
+  const dataIdPrincipal = candidatos[0] ? candidatos[0].id : null;
+
+  if (!esPayment) {
     await log(env, {
-      resultado: 'firma_invalida', tipo, dataId, xSignature: xSignatureHeader,
-      detalle: motivoFirma, bodyCrudo: rawText,
+      resultado: 'ignorado_no_es_payment', tipo, dataId: dataIdPrincipal, xSignature, bodyCrudo: rawText,
+      url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+      candidatosJson: JSON.stringify(candidatos),
     });
     return new Response('OK', { status: 200 });
   }
 
+  if (!ts || !hashEsperado) {
+    await log(env, {
+      resultado: 'sin_header_x_signature_valido', tipo, dataId: dataIdPrincipal, xSignature, bodyCrudo: rawText,
+      url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+      candidatosJson: JSON.stringify(candidatos),
+    });
+    return new Response('OK', { status: 200 });
+  }
+
+  if (!env.MP_WEBHOOK_SECRET) {
+    await log(env, {
+      resultado: 'sin_secreto_configurado', tipo, dataId: dataIdPrincipal, xSignature, bodyCrudo: rawText,
+      url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+      candidatosJson: JSON.stringify(candidatos),
+      detalle: 'MP_WEBHOOK_SECRET no está cargado — no se puede validar la firma, se continúa sin validar.',
+    });
+  } else {
+    // Probamos la firma contra CADA candidato de id (con y sin minúsculas) para saber cuál matchea.
+    let candidatoGanador = null;
+    for (const c of candidatos) {
+      for (const idVariante of new Set([c.id, c.id.toLowerCase()])) {
+        const manifest = `id:${idVariante};request-id:${xRequestId};ts:${ts};`;
+        const hashCalculado = await hmacHex(env.MP_WEBHOOK_SECRET, manifest);
+        c.hashCalculado = c.hashCalculado || hashCalculado;
+        c.manifest = c.manifest || manifest;
+        if (hashCalculado === hashEsperado) {
+          candidatoGanador = { ...c, manifest, hashCalculado };
+          break;
+        }
+      }
+      if (candidatoGanador) break;
+    }
+
+    if (!candidatoGanador) {
+      await log(env, {
+        resultado: 'firma_invalida', tipo, dataId: dataIdPrincipal, xSignature, bodyCrudo: rawText,
+        url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+        manifestUsado: candidatos[0] ? candidatos[0].manifest : null,
+        hashCalculado: candidatos[0] ? candidatos[0].hashCalculado : null,
+        hashEsperado, candidatosJson: JSON.stringify(candidatos),
+        detalle: 'Ningún candidato de data.id (query/body/resource, con y sin minúsculas) produjo un hash que matchee.',
+      });
+      return new Response('OK', { status: 200 });
+    }
+
+    // Firma válida: usamos el id que efectivamente ganó, sea cual sea su origen.
+    candidatos.unshift(candidatoGanador);
+  }
+
+  const dataId = candidatos[0] ? candidatos[0].id : dataIdPrincipal;
+
   if (!env.MP_ACCESS_TOKEN) {
     await log(env, {
-      resultado: 'sin_access_token', tipo, dataId, xSignature: xSignatureHeader,
-      detalle: 'MP_ACCESS_TOKEN no está cargado', bodyCrudo: rawText,
+      resultado: 'sin_access_token', tipo, dataId, xSignature, bodyCrudo: rawText,
+      url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+      candidatosJson: JSON.stringify(candidatos),
+      detalle: 'MP_ACCESS_TOKEN no está cargado en este entorno (revisar Production vs Preview).',
     });
     return new Response('OK', { status: 200 });
   }
@@ -130,13 +153,16 @@ export async function onRequestPost({ request, env }) {
       headers: { 'Authorization': 'Bearer ' + env.MP_ACCESS_TOKEN },
     });
     if (!pagoRes.ok) {
-      const detalle = await pagoRes.text();
+      const detalleTxt = await pagoRes.text();
       await log(env, {
-        resultado: 'error_consultando_pago', tipo, dataId, xSignature: xSignatureHeader,
-        detalle: `HTTP ${pagoRes.status}: ${detalle}`, bodyCrudo: rawText,
+        resultado: 'error_consultando_pago', tipo, dataId, xSignature, bodyCrudo: rawText,
+        url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+        candidatosJson: JSON.stringify(candidatos),
+        detalle: `HTTP ${pagoRes.status}: ${detalleTxt}`,
       });
       return new Response('OK', { status: 200 });
     }
+
     const pago = await pagoRes.json();
     const trabajoId = pago.external_reference;
     const db = env.DB;
@@ -151,11 +177,11 @@ export async function onRequestPost({ request, env }) {
     ).run();
 
     if (update.meta.changes === 0) {
-      // El pago se pudo consultar, pero no hay ninguna fila en `pagos` con ese trabajo_id.
       await log(env, {
-        resultado: 'pagos_sin_fila_para_ese_trabajo_id', tipo, dataId, trabajoId, xSignature: xSignatureHeader,
+        resultado: 'pagos_sin_fila_para_ese_trabajo_id', tipo, dataId, trabajoId, xSignature, bodyCrudo: rawText,
+        url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+        candidatosJson: JSON.stringify(candidatos),
         detalle: `external_reference recibido: "${trabajoId}" — no matcheó ninguna fila en pagos.trabajo_id`,
-        bodyCrudo: rawText,
       });
       return new Response('OK', { status: 200 });
     }
@@ -168,14 +194,16 @@ export async function onRequestPost({ request, env }) {
     }
 
     await log(env, {
-      resultado: 'actualizado_ok', tipo, dataId, trabajoId, xSignature: xSignatureHeader,
-      detalle: `status=${pago.status}`, bodyCrudo: rawText,
+      resultado: 'actualizado_ok', tipo, dataId, trabajoId, xSignature, bodyCrudo: rawText,
+      url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+      candidatosJson: JSON.stringify(candidatos), detalle: `status=${pago.status} (live_mode del pago: ${pago.live_mode})`,
     });
     return new Response('OK', { status: 200 });
   } catch (err) {
     await log(env, {
-      resultado: 'excepcion', tipo, dataId, xSignature: xSignatureHeader,
-      detalle: String(err && err.message || err), bodyCrudo: rawText,
+      resultado: 'excepcion', tipo, dataId, xSignature, bodyCrudo: rawText,
+      url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
+      candidatosJson: JSON.stringify(candidatos), detalle: String((err && err.message) || err),
     });
     return new Response('OK', { status: 200 });
   }
