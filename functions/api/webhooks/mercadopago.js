@@ -104,12 +104,19 @@ export async function onRequestPost({ request, env }) {
       detalle: 'MP_WEBHOOK_SECRET no está cargado — no se puede validar la firma, se continúa sin validar.',
     });
   } else {
+    // .trim() defensivo: un espacio o salto de línea invisible al pegar el secreto
+    // en Cloudflare rompe el HMAC entero sin que se note a simple vista.
+    const secret = env.MP_WEBHOOK_SECRET.trim();
+    const secretPreview = secret.length > 6
+      ? `${secret.slice(0, 3)}…${secret.slice(-3)} (${secret.length} caracteres, original ${env.MP_WEBHOOK_SECRET.length})`
+      : `(${secret.length} caracteres)`;
+
     // Probamos la firma contra CADA candidato de id (con y sin minúsculas) para saber cuál matchea.
     let candidatoGanador = null;
     for (const c of candidatos) {
       for (const idVariante of new Set([c.id, c.id.toLowerCase()])) {
         const manifest = `id:${idVariante};request-id:${xRequestId};ts:${ts};`;
-        const hashCalculado = await hmacHex(env.MP_WEBHOOK_SECRET, manifest);
+        const hashCalculado = await hmacHex(secret, manifest);
         c.hashCalculado = c.hashCalculado || hashCalculado;
         c.manifest = c.manifest || manifest;
         if (hashCalculado === hashEsperado) {
@@ -127,7 +134,7 @@ export async function onRequestPost({ request, env }) {
         manifestUsado: candidatos[0] ? candidatos[0].manifest : null,
         hashCalculado: candidatos[0] ? candidatos[0].hashCalculado : null,
         hashEsperado, candidatosJson: JSON.stringify(candidatos),
-        detalle: 'Ningún candidato de data.id (query/body/resource, con y sin minúsculas) produjo un hash que matchee.',
+        detalle: `Ningún candidato de data.id (query/body/resource, con y sin minúsculas) produjo un hash que matchee. Secreto usado: ${secretPreview}.`,
       });
       return new Response('OK', { status: 200 });
     }
