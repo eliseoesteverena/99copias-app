@@ -96,6 +96,8 @@ export async function onRequestPost({ request, env }) {
     return new Response('OK', { status: 200 });
   }
 
+  let firmaOk = null; // true / false / null (null = no se pudo evaluar, ej. sin secreto)
+
   if (!env.MP_WEBHOOK_SECRET) {
     await log(env, {
       resultado: 'sin_secreto_configurado', tipo, dataId: dataIdPrincipal, xSignature, bodyCrudo: rawText,
@@ -128,19 +130,25 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (!candidatoGanador) {
+      firmaOk = false;
+      // OJO: no cortamos acá. Mercado Pago documenta que las notificaciones originadas
+      // en pagos por Código QR (ej. escaneado con la app de MP) NO se pueden validar con
+      // la clave secreta — la firma nunca va a matchear aunque la notificación sea legítima.
+      // Igual seguimos y confirmamos el pago contra la API real (GET /v1/payments/{id}
+      // con nuestro Access Token) en vez de confiar ciegamente en el body: esa consulta,
+      // no la firma, es la verdadera fuente de verdad acá.
       await log(env, {
-        resultado: 'firma_invalida', tipo, dataId: dataIdPrincipal, xSignature, bodyCrudo: rawText,
+        resultado: 'firma_invalida_se_continua_igual', tipo, dataId: dataIdPrincipal, xSignature, bodyCrudo: rawText,
         url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
         manifestUsado: candidatos[0] ? candidatos[0].manifest : null,
         hashCalculado: candidatos[0] ? candidatos[0].hashCalculado : null,
         hashEsperado, candidatosJson: JSON.stringify(candidatos),
-        detalle: `Ningún candidato de data.id (query/body/resource, con y sin minúsculas) produjo un hash que matchee. Secreto usado: ${secretPreview}.`,
+        detalle: `Ningún candidato de data.id produjo un hash que matchee (posible pago por QR, no firmable según doc de MP). Secreto usado: ${secretPreview}. Se continúa igual y se confirma contra GET /v1/payments.`,
       });
-      return new Response('OK', { status: 200 });
+    } else {
+      firmaOk = true;
+      candidatos.unshift(candidatoGanador);
     }
-
-    // Firma válida: usamos el id que efectivamente ganó, sea cual sea su origen.
-    candidatos.unshift(candidatoGanador);
   }
 
   const dataId = candidatos[0] ? candidatos[0].id : dataIdPrincipal;
@@ -165,7 +173,7 @@ export async function onRequestPost({ request, env }) {
         resultado: 'error_consultando_pago', tipo, dataId, xSignature, bodyCrudo: rawText,
         url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
         candidatosJson: JSON.stringify(candidatos),
-        detalle: `HTTP ${pagoRes.status}: ${detalleTxt}`,
+        detalle: `firma_ok=${firmaOk} · HTTP ${pagoRes.status}: ${detalleTxt}`,
       });
       return new Response('OK', { status: 200 });
     }
@@ -188,7 +196,7 @@ export async function onRequestPost({ request, env }) {
         resultado: 'pagos_sin_fila_para_ese_trabajo_id', tipo, dataId, trabajoId, xSignature, bodyCrudo: rawText,
         url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
         candidatosJson: JSON.stringify(candidatos),
-        detalle: `external_reference recibido: "${trabajoId}" — no matcheó ninguna fila en pagos.trabajo_id`,
+        detalle: `firma_ok=${firmaOk} · external_reference recibido: "${trabajoId}" — no matcheó ninguna fila en pagos.trabajo_id`,
       });
       return new Response('OK', { status: 200 });
     }
@@ -203,7 +211,8 @@ export async function onRequestPost({ request, env }) {
     await log(env, {
       resultado: 'actualizado_ok', tipo, dataId, trabajoId, xSignature, bodyCrudo: rawText,
       url: url.toString(), metodo: 'POST', headersJson: JSON.stringify(headersObj), ts, xRequestId,
-      candidatosJson: JSON.stringify(candidatos), detalle: `status=${pago.status} (live_mode del pago: ${pago.live_mode})`,
+      candidatosJson: JSON.stringify(candidatos),
+      detalle: `firma_ok=${firmaOk} · status=${pago.status} (live_mode del pago: ${pago.live_mode})`,
     });
     return new Response('OK', { status: 200 });
   } catch (err) {

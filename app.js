@@ -522,6 +522,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     const { init_point } = await apiPost('/api/checkout', { trabajo_id });
 
     localStorage.setItem(LS_CLIENTE, JSON.stringify(payload.cliente));
+    state.trabajoIdPago = trabajo_id;
 
     // No redirigimos directo: en desktop es común no estar logueado en MP.
     // Mostramos QR (para pagar desde el celular) + link para seguir en la misma pestaña.
@@ -530,6 +531,12 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     document.getElementById('payLink').href = init_point;
     document.getElementById('payLaunch').style.display = 'block';
     btn.style.display = 'none';
+
+    // Si se paga escaneando el QR con la app de Mercado Pago, el pago se completa
+    // en el celular y esta pestaña de escritorio nunca recibe ningún back_url de vuelta
+    // (no hay redirect posible entre dispositivos distintos). Por eso preguntamos
+    // nosotros mismos, cada pocos segundos, si ya se acreditó.
+    iniciarPollingPago(trabajo_id);
   } catch (err) {
     console.error(err);
     errEl.textContent = 'No pudimos generar el checkout. Intentá de nuevo en unos segundos.';
@@ -622,23 +629,52 @@ const RESULTADOS = {
   },
 };
 
-function mostrarResultadoSiCorresponde() {
-  const params = new URLSearchParams(window.location.search);
-  const estado = params.get('estado');
-  if (!estado || !RESULTADOS[estado]) return false;
-
+function mostrarResultado(estadoKey, trabajoId) {
+  const r = RESULTADOS[estadoKey];
+  if (!r) return;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('is-active'));
   document.getElementById('stepline').style.display = 'none';
   document.querySelector('.wizard-nav').style.display = 'none';
 
-  const r = RESULTADOS[estado];
   document.getElementById('resultadoEyebrow').textContent = r.eyebrow;
   document.getElementById('resultadoTitulo').textContent = r.titulo;
   document.getElementById('resultadoTexto').textContent = r.texto;
-  const trabajoId = params.get('trabajo');
   document.getElementById('resultadoTrabajo').textContent = trabajoId ? 'PEDIDO #' + trabajoId : '';
   document.getElementById('panel-resultado').classList.add('is-active');
+}
+
+function mostrarResultadoSiCorresponde() {
+  const params = new URLSearchParams(window.location.search);
+  const estado = params.get('estado');
+  if (!estado || !RESULTADOS[estado]) return false;
+  mostrarResultado(estado, params.get('trabajo'));
   return true;
+}
+
+// Polling de respaldo: cubre el caso de pago por QR (escaneado con la app de MP),
+// donde nunca hay un back_url de vuelta a esta pestaña. Se corta solo al confirmar
+// el pago, al fallar repetidamente, o después de 10 minutos para no dejarlo colgado.
+let pollingPagoId = null;
+function iniciarPollingPago(trabajoId) {
+  if (pollingPagoId) clearInterval(pollingPagoId);
+  const inicio = Date.now();
+  const LIMITE_MS = 10 * 60 * 1000;
+
+  pollingPagoId = setInterval(async () => {
+    if (Date.now() - inicio > LIMITE_MS) {
+      clearInterval(pollingPagoId);
+      return;
+    }
+    try {
+      const data = await apiGet('/api/trabajos/estado?trabajo_id=' + trabajoId);
+      if (data.pagado) {
+        clearInterval(pollingPagoId);
+        mostrarResultado('aprobado', trabajoId);
+      }
+    } catch (err) {
+      console.error('Error consultando estado del pago:', err); // se sigue reintentando solo
+    }
+  }, 4000);
 }
 
 document.getElementById('btnNuevoPedido').addEventListener('click', () => {
