@@ -12,10 +12,13 @@ const state = {
   turno: null,              // objeto turno elegido
   cliente: JSON.parse(localStorage.getItem(LS_CLIENTE) || 'null'),
   direccionDistinta: false,
+  // Todos los archivos de este pedido suben bajo la misma carpeta de staging en R2
+  // (staging/{sesionSubida}/...) — se confirman o se limpian juntos.
+  sesionSubida: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
 };
 
 let fileIdCounter = 0;
-const files = new Map(); // id -> { file, isImage, thumbUrl, numPages, settings:{copias, faz, acabado, rango} }
+const files = new Map(); // id -> { file, isImage, thumbUrl, numPages, settings:{...}, r2Key, subiendo, errorSubida }
 
 const PRODUCTO_PRIMARIO_DESC = 'Impresión ByN A4 (carilla)';
 const ACABADO_A_PRODUCTO = {
@@ -224,38 +227,101 @@ function readGlobalSettings() {
   };
 }
 
+const TAMANO_MAXIMO_BYTES = 50 * 1024 * 1024; // 50 MB — debe coincidir con functions/api/lib/r2.js
+
 function addFiles(fileListObj) {
-  const accepted = [], rejected = [];
+  const accepted = [], rejected = [], demasiadoGrandes = [];
   Array.from(fileListObj).forEach(f => {
-    const ok = f.type === 'application/pdf' || f.type.startsWith('image/');
-    (ok ? accepted : rejected).push(f);
+    const tipoOk = f.type === 'application/pdf' || f.type.startsWith('image/');
+    if (!tipoOk) { rejected.push(f); return; }
+    if (f.size > TAMANO_MAXIMO_BYTES) { demasiadoGrandes.push(f); return; }
+    accepted.push(f);
   });
 
   const alertEl = document.getElementById('rejectedAlert');
-  if (rejected.length) {
-    alertEl.textContent = `No pudimos cargar ${rejected.length === 1 ? 'este archivo' : 'estos archivos'} (solo PDF e imágenes): ${rejected.map(f => f.name).join(', ')}`;
+  const motivos = [];
+  if (rejected.length) motivos.push(`${rejected.length === 1 ? 'este archivo no es válido' : 'estos archivos no son válidos'} (solo PDF e imágenes): ${rejected.map(f => f.name).join(', ')}`);
+  if (demasiadoGrandes.length) motivos.push(`${demasiadoGrandes.length === 1 ? 'este archivo supera' : 'estos archivos superan'} los 50 MB: ${demasiadoGrandes.map(f => f.name).join(', ')}`);
+  if (motivos.length) {
+    alertEl.textContent = 'No pudimos cargar ' + motivos.join(' · ');
     alertEl.style.display = 'flex';
   } else {
     alertEl.style.display = 'none';
   }
 
   const g = readGlobalSettings();
-  const newPdfIds = [];
+  const newIds = [];
   accepted.forEach(f => {
     const id = 'f' + (++fileIdCounter);
     const isImage = f.type.startsWith('image/');
     const thumbUrl = isImage ? URL.createObjectURL(f) : null;
-    files.set(id, { file: f, isImage, thumbUrl, numPages: 1, settings: { ...g } });
-    if (!isImage) newPdfIds.push(id);
+    files.set(id, {
+      file: f, isImage, thumbUrl, numPages: 1, settings: { ...g },
+      r2Key: null, subiendo: false, errorSubida: null,
+    });
+    newIds.push(id);
   });
 
   if (accepted.length) {
     document.getElementById('dzWrap').style.display = 'none';
     document.getElementById('loadedWrap').style.display = 'block';
     renderFileList();
-    newPdfIds.forEach(readPdfMeta);
+    newIds.forEach(id => {
+      const entry = files.get(id);
+      if (!entry.isImage) readPdfMeta(id);
+      subirArchivo(id);
+    });
   }
   updateNavState();
+}
+
+async function subirArchivo(id) {
+  const entry = files.get(id);
+  if (!entry) return;
+  entry.subiendo = true;
+  entry.errorSubida = null;
+  actualizarEstadoSubida(id);
+
+  try {
+    const qs = new URLSearchParams({ nombre: entry.file.name, sesion: state.sesionSubida });
+    const res = await fetch('/api/archivos?' + qs.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': entry.file.type || 'application/octet-stream' },
+      body: entry.file,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Error al subir el archivo.');
+    }
+    const data = await res.json();
+    const current = files.get(id);
+    if (!current) return; // se borró mientras subía
+    current.r2Key = data.key;
+    current.subiendo = false;
+  } catch (err) {
+    console.error('Error subiendo archivo:', err);
+    const current = files.get(id);
+    if (!current) return;
+    current.subiendo = false;
+    current.errorSubida = err.message || 'No se pudo subir. Probá de nuevo.';
+  }
+  actualizarEstadoSubida(id);
+  updateNavState();
+}
+
+function actualizarEstadoSubida(id) {
+  const el = document.getElementById('upload-' + id);
+  if (!el) { renderFileList(); return; }
+  const entry = files.get(id);
+  if (!entry) return;
+  el.innerHTML = estadoSubidaHtml(id, entry);
+}
+
+function estadoSubidaHtml(id, entry) {
+  if (entry.subiendo) return `<span class="upload-status is-uploading">⟳ Subiendo…</span>`;
+  if (entry.errorSubida) return `<span class="upload-status is-error">⚠ ${entry.errorSubida} <button type="button" class="btn btn-sm btn-outline" data-retry="${id}">Reintentar</button></span>`;
+  if (entry.r2Key) return `<span class="upload-status is-ok">✓ Subido</span>`;
+  return '';
 }
 
 async function readPdfMeta(id) {
@@ -306,6 +372,7 @@ function renderFileList() {
           <div class="idx">ARCHIVO ${i}/${files.size}${entry.isImage ? '' : ' · ' + entry.numPages + ' pág.'}</div>
           <div class="fname">${entry.file.name}</div>
           <div class="fsub">${entry.isImage ? 'IMAGEN' : 'PDF'} · ${(entry.file.size / 1024).toFixed(0)} KB</div>
+          <div id="upload-${id}">${estadoSubidaHtml(id, entry)}</div>
         </div>
         <button type="button" class="file-remove" data-remove="${id}" aria-label="Quitar">✕</button>
       </div>
@@ -365,11 +432,20 @@ function renderFileList() {
       updateDim(group.dataset.id);
     });
   });
+  list.querySelectorAll('[data-retry]').forEach(btn => {
+    btn.addEventListener('click', () => subirArchivo(btn.dataset.retry));
+  });
   list.querySelectorAll('[data-remove]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.remove;
       const entry = files.get(id);
-      if (entry && entry.isImage && entry.thumbUrl) URL.revokeObjectURL(entry.thumbUrl);
+      if (entry) {
+        if (entry.isImage && entry.thumbUrl) URL.revokeObjectURL(entry.thumbUrl);
+        // Si ya se había subido (o está subiendo) a staging, lo borramos de R2 también.
+        if (entry.r2Key) {
+          fetch('/api/archivos?key=' + encodeURIComponent(entry.r2Key), { method: 'DELETE' }).catch(() => {});
+        }
+      }
       files.delete(id);
       if (files.size === 0) {
         document.getElementById('dzWrap').style.display = 'block';
@@ -515,6 +591,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
         rango: entry.isImage ? '' : (entry.settings.rango || ''),
         faz: entry.isImage ? 'simple' : entry.settings.faz,
         acabado: entry.settings.acabado,
+        r2_key: entry.r2Key,
       })),
     };
 
@@ -552,7 +629,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
 function stepValido(n) {
   switch (n) {
     case 1: return !!state.zona;
-    case 2: return files.size > 0;
+    case 2: return files.size > 0 && [...files.values()].every(e => e.r2Key && !e.subiendo && !e.errorSubida);
     case 3: return !!(state.fecha && state.turno);
     case 4: return clienteFormValido();
     default: return true;

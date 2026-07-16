@@ -1,4 +1,5 @@
 import { calcularPrecio } from './lib/precio.js';
+import { sanitizarNombreArchivo } from './lib/r2.js';
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -16,6 +17,21 @@ export async function onRequestPost({ request, env }) {
     }
 
     const db = env.DB;
+
+    // Los archivos ya se subieron a R2 (staging) durante el Paso 2. Acá confirmamos que
+    // cada uno realmente esté ahí antes de cobrar nada — si falta alguno (subida incompleta,
+    // o expiró por la regla de ciclo de vida de staging/), se corta el pedido.
+    const objetosStaging = [];
+    for (const a of archivos) {
+      if (!a.r2_key) {
+        return Response.json({ error: `El archivo "${a.nombre || ''}" todavía no terminó de subirse. Esperá a que termine e intentá de nuevo.` }, { status: 400 });
+      }
+      const obj = await env.BUCKET.get(a.r2_key);
+      if (!obj) {
+        return Response.json({ error: `No encontramos el archivo "${a.nombre || ''}" subido. Volvé al paso de archivos y volvé a cargarlo.` }, { status: 410 });
+      }
+      objetosStaging.push(obj);
+    }
 
     // Chequeo de cupo antes de confirmar (protección básica contra sobreventa).
     const turno = await db.prepare('SELECT capacidad_maxima FROM turnos_entrega WHERE id = ?').bind(turno_entrega_id).first();
@@ -63,14 +79,43 @@ export async function onRequestPost({ request, env }) {
     // Precio recalculado en servidor — nunca se confía en el total del cliente.
     const { items, total } = await calcularPrecio(db, archivos);
 
-    const configuracion = JSON.stringify({ archivos, items });
+    const configuracionInicial = JSON.stringify({ archivos, items });
 
     const insertTrabajo = await db.prepare(
       `INSERT INTO trabajos (cliente_id, configuracion, estado, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, pagado)
        VALUES (?, ?, 'pendiente', ?, ?, ?, ?, ?, 0)`
-    ).bind(clienteId, configuracion, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id).run();
+    ).bind(clienteId, configuracionInicial, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id).run();
 
-    return Response.json({ trabajo_id: insertTrabajo.meta.last_row_id, total, items });
+    const trabajoId = insertTrabajo.meta.last_row_id;
+
+    // Confirmamos cada archivo: lo copiamos de staging/ a trabajos/{id}/ (server-side,
+    // sin pasar por el navegador) y borramos el original de staging. Si algo falla acá,
+    // el trabajo ya existe igual — dejamos constancia del error en la configuración
+    // en vez de perder el pedido ya pagado/por pagar.
+    const archivosConfirmados = [];
+    for (let i = 0; i < archivos.length; i++) {
+      const a = archivos[i];
+      const obj = objetosStaging[i];
+      const nombreSanitizado = sanitizarNombreArchivo(a.nombre || `archivo-${i + 1}`);
+      const keyFinal = `trabajos/${trabajoId}/${i + 1}-${nombreSanitizado}`;
+      try {
+        await env.BUCKET.put(keyFinal, obj.body, {
+          httpMetadata: obj.httpMetadata,
+          customMetadata: obj.customMetadata,
+        });
+        await env.BUCKET.delete(a.r2_key);
+        archivosConfirmados.push({ ...a, r2_key: keyFinal });
+      } catch (err) {
+        console.error(`Error confirmando archivo ${a.r2_key} -> ${keyFinal}:`, err);
+        archivosConfirmados.push({ ...a, r2_key: a.r2_key, error_confirmacion: String((err && err.message) || err) });
+      }
+    }
+
+    await db.prepare('UPDATE trabajos SET configuracion = ? WHERE id = ?')
+      .bind(JSON.stringify({ archivos: archivosConfirmados, items }), trabajoId)
+      .run();
+
+    return Response.json({ trabajo_id: trabajoId, total, items });
   } catch (err) {
     console.error(err);
     return Response.json({ error: err.message || 'No se pudo crear el trabajo.' }, { status: 500 });
