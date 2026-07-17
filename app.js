@@ -471,6 +471,17 @@ function updateDim(id) {
   updateNavState();
 }
 
+// Los segmented de la configuración global (arriba de la lista de archivos) necesitan
+// su propio listener para togglear is-on — son distintos de los de cada tarjeta.
+document.querySelectorAll('#gAcabado, #gFaz').forEach(group => {
+  group.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    group.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
+    btn.classList.add('is-on');
+  });
+});
+
 document.getElementById('btnApplyAll').addEventListener('click', () => {
   const g = readGlobalSettings();
   files.forEach(entry => { entry.settings = { ...entry.settings, copias: g.copias, faz: g.faz, acabado: g.acabado }; });
