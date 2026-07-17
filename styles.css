@@ -57,24 +57,15 @@
 }
 
 *{ box-sizing:border-box; }
-html{ font-size:16px; }
+html{ font-size:18px; }
 body{
   margin:0;
-  background: var(--surface);
+  background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
   font-weight:400;
   line-height:1.45;
   -webkit-font-smoothing:antialiased;
-}
-
-/* Fondo tipo papel milimetrado, muy tenue, sólo en la superficie general */
-body{
-  background-image:
-    linear-gradient(var(--ink-08) 1px, transparent 1px),
-    linear-gradient(90deg, var(--ink-08) 1px, transparent 1px);
-  background-size: 28px 28px;
-  background-position: -1px -1px;
 }
 
 h1,h2,h3,h4{ margin:0; font-weight:600; letter-spacing:-.01em; }
@@ -102,22 +93,20 @@ input, select, textarea{ font-family:inherit; }
 
 .masthead{
   display:flex;
-  align-items:baseline;
-  justify-content:space-between;
+  align-items:center;
   border-bottom: 2px solid var(--ink);
   padding-bottom: .85rem;
   margin-bottom: 1.75rem;
 }
 .masthead .brand{
-  font-weight:700;
-  font-size:1.15rem;
-  letter-spacing:-.02em;
+  display:flex;
+  align-items:center;
 }
-.masthead .brand span{ color: var(--blue); }
-.masthead .doc-id{
-  font-family: var(--font-mono);
-  font-size:.72rem;
-  color: var(--ink-60);
+.brand-logo{
+  height: 2.5rem;
+  width: 2.5rem;
+  object-fit: contain;
+  display:block;
 }
 
 /* ---------------------------------------------------------
@@ -296,7 +285,7 @@ input, select, textarea{ font-family:inherit; }
 .checkline{ display:flex; align-items:center; gap:.5rem; font-size:.85rem; }
 .checkline input{ width:1rem; height:1rem; accent-color:var(--blue); }
 
-.segmented{ display:inline-flex; border: var(--line); }
+.segmented{ display:inline-flex; border: var(--line); align-self:flex-start; max-width:100%; }
 .segmented button{
   border:none; background:var(--paper); color:var(--ink);
   padding:.5rem .8rem; font-size:.78rem; font-weight:600; cursor:pointer;
@@ -337,6 +326,11 @@ input, select, textarea{ font-family:inherit; }
 .file-meta .idx{ font-family:var(--font-mono); font-size:.65rem; color:var(--ink-40); }
 .file-meta .fname{ font-weight:600; font-size:.92rem; word-break:break-word; }
 .file-meta .fsub{ font-family:var(--font-mono); font-size:.7rem; color:var(--ink-60); margin-top:.15rem; }
+.upload-status{ display:inline-flex; align-items:center; gap:.4rem; font-family:var(--font-mono); font-size:.68rem; margin-top:.3rem; }
+.upload-status.is-uploading{ color:var(--ink-60); }
+.upload-status.is-ok{ color:#0a7a3d; }
+.upload-status.is-error{ color:var(--danger); flex-wrap:wrap; }
+.upload-status .btn{ padding:.15rem .5rem; font-size:.66rem; }
 .file-remove{
   border:var(--line-soft); background:var(--paper); width:1.9rem; height:1.9rem;
   display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-60);

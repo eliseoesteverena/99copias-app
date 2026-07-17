@@ -519,6 +519,10 @@ document.getElementById('cDireccionDistinta').addEventListener('change', e => {
   updateNavState();
 });
 
+// El botón "Continuar" depende de que el formulario esté completo — hay que
+// revalidarlo en cada tecleo, no solo cuando se toca el checkbox de dirección.
+document.getElementById('panel-4').addEventListener('input', updateNavState);
+
 function readClienteForm() {
   return {
     nombre: document.getElementById('cNombre').value.trim(),
@@ -764,8 +768,6 @@ document.getElementById('btnNuevoPedido').addEventListener('click', () => {
 (async function init() {
   if (mostrarResultadoSiCorresponde()) return; // no inicializamos el wizard en esta vista
 
-  document.getElementById('docId').textContent =
-    'HOJA DE PEDIDO — ' + new Date().toISOString().slice(0, 10).replaceAll('-', '.');
   await loadProductos();
   await loadZonas();
   updateStepline();
