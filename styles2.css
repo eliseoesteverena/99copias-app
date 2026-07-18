@@ -312,6 +312,7 @@ input, select, textarea{ font-family:inherit; }
   flex:0 0 auto;
 }
 .segmented button.is-on{ background:var(--ink); color:#fff; }
+.segmented button:disabled{ opacity:.3; cursor:not-allowed; text-decoration:line-through; }
 
 /* ---------------------------------------------------------
    FICHAS DE ARCHIVO

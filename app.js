@@ -381,7 +381,45 @@ function labelProductoActual(entry) {
   return p ? labelProducto(p) : '';
 }
 function labelAcabado(v) {
-  return { suelto: 'Suelto', abrochado: 'Abrochado', anillado: 'Anillado', clip: 'Clip' }[v] || 'Suelto';
+  const p = productoPorCodigo(v);
+  return p ? labelSecundario(p) : 'Suelto';
+}
+function labelSecundario(p) {
+  // "Anillados A4" -> "Anillado", "Abrochadas" -> "Abrochado", "Sueltas" -> "Suelto", "Clip" -> "Clip"
+  const map = { suelto: 'Suelto', abrochado: 'Abrochado', anillado: 'Anillado', clip: 'Clip' };
+  return map[p.codigo] || p.descripcion;
+}
+
+// Páginas que realmente se van a imprimir de este archivo (respeta el rango elegido).
+function paginasActualesDe(entry) {
+  return entry.isImage ? 1 : contarPaginasEnRango(entry.settings.rango, entry.numPages || 1);
+}
+
+function acabadoPermitido(entry, secundario) {
+  const paginas = paginasActualesDe(entry);
+  return !secundario.paginas_minimas || paginas >= secundario.paginas_minimas;
+}
+
+function renderAcabadoBotones(entry) {
+  return secundariosDisponibles().map(s => {
+    const permitido = acabadoPermitido(entry, s);
+    const isOn = entry.settings.acabado === s.codigo;
+    return `<button type="button" data-value="${s.codigo}"
+      class="${isOn ? 'is-on' : ''}" ${permitido ? '' : 'disabled title="Necesita al menos ' + s.paginas_minimas + ' páginas seleccionadas"'}
+      >${labelSecundario(s)}</button>`;
+  }).join('');
+}
+
+// Debajo del segmented, un aviso puntual si el acabado elegido justo dejó de ser válido
+// (ej. el cliente achicó el rango de páginas después de haber elegido "Anillado").
+function acabadoBloqueadoHint(entry) {
+  const actual = productoPorCodigo(entry.settings.acabado);
+  if (actual && !acabadoPermitido(entry, actual)) {
+    return `<p class="hint" style="color:var(--danger); margin-top:.4rem;">
+      "${labelSecundario(actual)}" necesita al menos ${actual.paginas_minimas} páginas — con ${paginasActualesDe(entry)} no está disponible.
+    </p>`;
+  }
+  return '';
 }
 
 function renderFileList() {
@@ -433,11 +471,9 @@ function renderFileList() {
         <div class="field span-2">
           <label>Acabado</label>
           <div class="segmented accent" data-id="${id}" data-field="acabado">
-            <button type="button" data-value="suelto" class="${entry.settings.acabado === 'suelto' ? 'is-on' : ''}">Suelto</button>
-            <button type="button" data-value="abrochado" class="${entry.settings.acabado === 'abrochado' ? 'is-on' : ''}">Abrochado</button>
-            <button type="button" data-value="anillado" class="${entry.settings.acabado === 'anillado' ? 'is-on' : ''}">Anillado</button>
-            <button type="button" data-value="clip" class="${entry.settings.acabado === 'clip' ? 'is-on' : ''}">Clip</button>
+            ${renderAcabadoBotones(entry)}
           </div>
+          ${acabadoBloqueadoHint(entry)}
         </div>
       </div>
       <div class="dim-line" id="dim-${id}">
@@ -462,7 +498,7 @@ function renderFileList() {
   list.querySelectorAll('.segmented[data-field]').forEach(group => {
     group.addEventListener('click', e => {
       const btn = e.target.closest('button');
-      if (!btn) return;
+      if (!btn || btn.disabled) return;
       group.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
       btn.classList.add('is-on');
       files.get(group.dataset.id).settings[group.dataset.field] = btn.dataset.value;
@@ -499,12 +535,37 @@ function renderFileList() {
 
 function updateDim(id) {
   const entry = files.get(id);
+  if (!entry) return;
+
+  // Si el acabado elegido ya no cumple el mínimo de páginas (ej. el cliente acaba de
+  // achicar el rango), volvemos automáticamente a "Suelto" en vez de dejar una
+  // selección inválida sin que se note.
+  const actual = productoPorCodigo(entry.settings.acabado);
+  let volvioASuelto = false;
+  if (actual && !acabadoPermitido(entry, actual) && entry.settings.acabado !== 'suelto') {
+    entry.settings.acabado = 'suelto';
+    volvioASuelto = true;
+  }
+
   const calc = calcularArchivo(entry);
   const el = document.getElementById('dim-' + id);
   if (el) {
     el.querySelector('span:nth-child(2)').textContent = `${calc.paginas} pág. × ${calc.copias} = ${calc.carillas} carillas`;
     el.querySelector('.result').innerHTML = `${labelProductoActual(entry)} · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span>`;
   }
+
+  // El habilitado/deshabilitado de cada botón de acabado depende de la cantidad de
+  // páginas actual, así que se recalcula en cada edición (rango, copias, etc.).
+  const grupoAcabado = document.querySelector(`.segmented[data-id="${id}"][data-field="acabado"]`);
+  if (grupoAcabado) grupoAcabado.innerHTML = renderAcabadoBotones(entry);
+  const hintWrap = grupoAcabado ? grupoAcabado.parentElement : null;
+  const hintExistente = hintWrap ? hintWrap.querySelector('.hint') : null;
+  if (hintExistente) hintExistente.remove();
+  if (hintWrap && volvioASuelto) {
+    hintWrap.insertAdjacentHTML('beforeend',
+      `<p class="hint" style="color:var(--danger); margin-top:.4rem;">Volvimos a "Suelto": "${labelSecundario(actual)}" necesita al menos ${actual.paginas_minimas} páginas.</p>`);
+  }
+
   updateNavState();
 }
 
@@ -521,8 +582,26 @@ document.querySelectorAll('#gAcabado, #gFaz, #gPrimario').forEach(group => {
 
 document.getElementById('btnApplyAll').addEventListener('click', () => {
   const g = readGlobalSettings();
-  files.forEach(entry => { entry.settings = { ...entry.settings, copias: g.copias, faz: g.faz, acabado: g.acabado }; });
+  const bloqueados = [];
+  files.forEach(entry => {
+    entry.settings = { ...entry.settings, copias: g.copias, faz: g.faz, primario: g.primario };
+    const secundarioElegido = productoPorCodigo(g.acabado);
+    if (secundarioElegido && acabadoPermitido(entry, secundarioElegido)) {
+      entry.settings.acabado = g.acabado;
+    } else if (secundarioElegido) {
+      entry.settings.acabado = 'suelto';
+      bloqueados.push(entry.file.name);
+    }
+  });
   renderFileList();
+
+  const alertEl = document.getElementById('rejectedAlert');
+  if (bloqueados.length) {
+    alertEl.textContent = `"${labelSecundario(productoPorCodigo(g.acabado))}" necesita al menos ${productoPorCodigo(g.acabado).paginas_minimas} páginas — quedó en "Suelto" para: ${bloqueados.join(', ')}`;
+    alertEl.style.display = 'flex';
+  } else {
+    alertEl.style.display = 'none';
+  }
 });
 
 /* Carga por dropzone + input "agregar más" */

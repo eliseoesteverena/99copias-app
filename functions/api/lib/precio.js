@@ -34,7 +34,7 @@ function contarPaginasEnRango(rango, totalPaginas) {
 // + los transversales (categoria_id NULL, ej. los acabados). Indexado por `codigo`.
 export async function catalogoDeCategoria(db, categoriaCodigo) {
   const { results: productos } = await db.prepare(
-    `SELECT p.id, p.descripcion, p.precio, p.jerarquia, p.codigo
+    `SELECT p.id, p.descripcion, p.precio, p.jerarquia, p.codigo, p.paginas_minimas
        FROM productos p
        LEFT JOIN categorias c ON c.id = p.categoria_id
       WHERE p.habilitado = 1
@@ -74,6 +74,12 @@ export async function calcularPrecio(db, archivos, categoriaCodigo) {
     const secundario = porCodigo[a.acabado];
     if (!secundario || secundario.jerarquia !== 'secundario') {
       throw new Error(`Acabado inválido o no disponible: "${a.acabado || ''}"`);
+    }
+    if (secundario.paginas_minimas && paginasSeleccionadas < secundario.paginas_minimas) {
+      throw new Error(
+        `"${a.nombre || 'Un archivo'}" tiene ${paginasSeleccionadas} página(s) seleccionada(s), ` +
+        `pero "${secundario.descripcion}" requiere un mínimo de ${secundario.paginas_minimas}.`
+      );
     }
     const subtotalSecundario = copias * secundario.precio;
 
