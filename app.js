@@ -708,16 +708,19 @@ const RESULTADOS = {
     eyebrow: 'PAGO APROBADO',
     titulo: '¡Listo! Tu pedido está confirmado',
     texto: 'Ya registramos el pago y tu pedido pasó a producción. Te vamos a avisar cuando esté en camino.',
+    color: '#0a7a3d',
   },
   rechazado: {
     eyebrow: 'PAGO RECHAZADO',
     titulo: 'No pudimos procesar el pago',
     texto: 'Mercado Pago rechazó el pago. Podés intentar de nuevo con otro medio de pago desde un nuevo pedido.',
+    color: '#c0392b',
   },
   pendiente: {
     eyebrow: 'PAGO PENDIENTE',
     titulo: 'Tu pago está en revisión',
     texto: 'Esto puede pasar con algunos medios de pago (ej. efectivo o transferencia). Te confirmamos por mail o WhatsApp apenas se acredite.',
+    color: '#b8860b',
   },
 };
 
@@ -728,6 +731,7 @@ function mostrarResultado(estadoKey, trabajoId) {
   document.getElementById('stepline').style.display = 'none';
   document.querySelector('.wizard-nav').style.display = 'none';
 
+  document.getElementById('resultadoDoodle').style.color = r.color;
   document.getElementById('resultadoEyebrow').textContent = r.eyebrow;
   document.getElementById('resultadoTitulo').textContent = r.titulo;
   document.getElementById('resultadoTexto').textContent = r.texto;
