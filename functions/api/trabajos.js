@@ -4,8 +4,11 @@ import { sanitizarNombreArchivo } from './lib/r2.js';
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
-    const { cliente, zona_id, turno_entrega_id, fecha_entrega, direccion_entrega, archivos } = body;
+    const { cliente, zona_id, turno_entrega_id, fecha_entrega, direccion_entrega, archivos, categoria } = body;
 
+    if (!categoria) {
+      return Response.json({ error: 'Falta la categoría del pedido.' }, { status: 400 });
+    }
     if (!cliente || !cliente.nombre || !cliente.apellido || !cliente.documento_numero) {
       return Response.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
     }
@@ -77,14 +80,17 @@ export async function onRequestPost({ request, env }) {
     }
 
     // Precio recalculado en servidor — nunca se confía en el total del cliente.
-    const { items, total } = await calcularPrecio(db, archivos);
+    const { items, total } = await calcularPrecio(db, archivos, categoria);
+
+    const categoriaRow = await db.prepare('SELECT id FROM categorias WHERE codigo = ?').bind(categoria).first();
+    const categoriaId = categoriaRow ? categoriaRow.id : null;
 
     const configuracionInicial = JSON.stringify({ archivos, items });
 
     const insertTrabajo = await db.prepare(
-      `INSERT INTO trabajos (cliente_id, configuracion, estado, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, pagado)
-       VALUES (?, ?, 'pendiente', ?, ?, ?, ?, ?, 0)`
-    ).bind(clienteId, configuracionInicial, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id).run();
+      `INSERT INTO trabajos (cliente_id, configuracion, estado, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, categoria_id, pagado)
+       VALUES (?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, 0)`
+    ).bind(clienteId, configuracionInicial, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, categoriaId).run();
 
     const trabajoId = insertTrabajo.meta.last_row_id;
 

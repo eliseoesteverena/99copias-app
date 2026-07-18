@@ -20,13 +20,8 @@ const state = {
 let fileIdCounter = 0;
 const files = new Map(); // id -> { file, isImage, thumbUrl, numPages, settings:{...}, r2Key, subiendo, errorSubida }
 
-const PRODUCTO_PRIMARIO_DESC = 'Impresión ByN A4 (carilla)';
-const ACABADO_A_PRODUCTO = {
-  suelto:    'Sueltas',
-  abrochado: 'Abrochadas',
-  anillado:  'Anillados A4',
-  clip:      'Clip',
-};
+// Cada proyecto/formulario "es" una categoría — esto es lo único que identifica cuál.
+const CATEGORIA = 'impresion-rapida';
 
 /* =========================================================
    UTILIDADES DE CÁLCULO (espejo del cálculo server-side)
@@ -54,9 +49,24 @@ function contarPaginasEnRango(rango, totalPaginas) {
   return set.size || totalPaginas;
 }
 
-function precioProducto(descripcion) {
-  const p = state.productos.find(p => p.descripcion === descripcion);
+function productoPorCodigo(codigo) {
+  return state.productos.find(p => p.codigo === codigo);
+}
+function precioPorCodigo(codigo) {
+  const p = productoPorCodigo(codigo);
   return p ? p.precio : 0;
+}
+function primariosDisponibles() {
+  return state.productos.filter(p => p.jerarquia === 'primario');
+}
+function secundariosDisponibles() {
+  return state.productos.filter(p => p.jerarquia === 'secundario');
+}
+function labelProducto(p) {
+  // "Impresión ByN A4 (carilla)" -> "ByN" / "Impresión Color A4 (carilla)" -> "Color"
+  // Si el patrón no matchea (otro producto a futuro), se muestra la descripción entera.
+  const m = p.descripcion.match(/Impresión\s+(\S+)/i);
+  return m ? m[1] : p.descripcion;
 }
 
 // Calcula el detalle y total de un archivo (estimación en cliente).
@@ -65,18 +75,16 @@ function calcularArchivo(entry) {
   const copias = entry.settings.copias || 1;
   const carillas = paginas * copias;
 
-  const precioPrimario = precioProducto(PRODUCTO_PRIMARIO_DESC);
+  const precioPrimario = precioPorCodigo(entry.settings.primario);
   const subtotalPrimario = carillas * precioPrimario;
 
-  const descSecundario = ACABADO_A_PRODUCTO[entry.settings.acabado] || ACABADO_A_PRODUCTO.suelto;
-  const precioSecundario = precioProducto(descSecundario);
+  const precioSecundario = precioPorCodigo(entry.settings.acabado);
   const subtotalSecundario = copias * precioSecundario;
 
   return {
     paginas, copias, carillas,
     subtotalPrimario, subtotalSecundario,
     total: subtotalPrimario + subtotalSecundario,
-    descSecundario,
   };
 }
 
@@ -110,7 +118,11 @@ async function apiPost(url, body) {
 
 async function loadProductos() {
   try {
-    state.productos = await apiGet('/api/productos');
+    state.productos = await apiGet('/api/productos?categoria=' + encodeURIComponent(CATEGORIA));
+    if (!primariosDisponibles().length) {
+      console.error('No hay ningún producto primario habilitado para la categoría', CATEGORIA);
+    }
+    renderPrimarioGlobal();
   } catch (err) {
     console.error('No se pudo cargar el catálogo de productos:', err);
     document.getElementById('rejectedAlert').textContent =
@@ -219,12 +231,25 @@ function selectTurno(t, cardEl) {
    ARCHIVOS
    ========================================================= */
 function readGlobalSettings() {
+  const primarioBtn = document.querySelector('#gPrimario button.is-on');
   return {
     copias: parseInt(document.getElementById('gCopias').value, 10) || 1,
     faz: document.querySelector('#gFaz button.is-on').dataset.value,
     acabado: document.querySelector('#gAcabado button.is-on').dataset.value,
+    primario: primarioBtn ? primarioBtn.dataset.value : (primariosDisponibles()[0] || {}).codigo,
     rango: '',
   };
+}
+
+// Genera el segmented de "tipo de impresión" (primario) en la config global a partir
+// del catálogo real — si mañana hay un 3er primario, aparece solo, sin tocar el HTML.
+function renderPrimarioGlobal() {
+  const cont = document.getElementById('gPrimario');
+  if (!cont) return;
+  const primarios = primariosDisponibles();
+  cont.innerHTML = primarios.map((p, i) =>
+    `<button type="button" data-value="${p.codigo}" class="${i === 0 ? 'is-on' : ''}">${labelProducto(p)}</button>`
+  ).join('');
 }
 
 const TAMANO_MAXIMO_BYTES = 50 * 1024 * 1024; // 50 MB — debe coincidir con functions/api/lib/r2.js
@@ -351,6 +376,10 @@ async function readPdfMeta(id) {
 }
 
 function labelFaz(v) { return v === 'doble' ? 'Doble faz' : 'Simple faz'; }
+function labelProductoActual(entry) {
+  const p = productoPorCodigo(entry.settings.primario);
+  return p ? labelProducto(p) : '';
+}
 function labelAcabado(v) {
   return { suelto: 'Suelto', abrochado: 'Abrochado', anillado: 'Anillado', clip: 'Clip' }[v] || 'Suelto';
 }
@@ -393,6 +422,14 @@ function renderFileList() {
             <button type="button" data-value="doble" class="${entry.settings.faz === 'doble' ? 'is-on' : ''}">Doble</button>
           </div>
         </div>`}
+        <div class="field">
+          <label>Tipo de impresión</label>
+          <div class="segmented accent" data-id="${id}" data-field="primario">
+            ${primariosDisponibles().map(p =>
+              `<button type="button" data-value="${p.codigo}" class="${entry.settings.primario === p.codigo ? 'is-on' : ''}">${labelProducto(p)}</button>`
+            ).join('')}
+          </div>
+        </div>
         <div class="field span-2">
           <label>Acabado</label>
           <div class="segmented accent" data-id="${id}" data-field="acabado">
@@ -407,7 +444,7 @@ function renderFileList() {
         <span class="tickmark">⊢</span>
         <span>${calc.paginas} pág. × ${calc.copias} = ${calc.carillas} carillas</span>
         <span class="tickmark">⊣</span>
-        <span class="result">${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span></span>
+        <span class="result">${labelProductoActual(entry)} · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span></span>
       </div>
     `;
     list.appendChild(card);
@@ -466,14 +503,14 @@ function updateDim(id) {
   const el = document.getElementById('dim-' + id);
   if (el) {
     el.querySelector('span:nth-child(2)').textContent = `${calc.paginas} pág. × ${calc.copias} = ${calc.carillas} carillas`;
-    el.querySelector('.result').innerHTML = `${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span>`;
+    el.querySelector('.result').innerHTML = `${labelProductoActual(entry)} · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span>`;
   }
   updateNavState();
 }
 
 // Los segmented de la configuración global (arriba de la lista de archivos) necesitan
 // su propio listener para togglear is-on — son distintos de los de cada tarjeta.
-document.querySelectorAll('#gAcabado, #gFaz').forEach(group => {
+document.querySelectorAll('#gAcabado, #gFaz, #gPrimario').forEach(group => {
   group.addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -576,7 +613,7 @@ function renderResumenFinal() {
     row.innerHTML = `
       <div>
         <div class="name">${entry.file.name}</div>
-        <div class="spec">${calc.carillas} carillas · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)}</div>
+        <div class="spec">${labelProductoActual(entry)} · ${calc.carillas} carillas · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)}</div>
       </div>
       <div class="val">${money(calc.total)}</div>`;
     body.appendChild(row);
@@ -594,6 +631,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
 
   try {
     const payload = {
+      categoria: CATEGORIA,
       cliente: readClienteForm(),
       zona_id: state.zona.id,
       turno_entrega_id: state.turno.turno_entrega_id,
@@ -605,6 +643,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
         copias: entry.settings.copias,
         rango: entry.isImage ? '' : (entry.settings.rango || ''),
         faz: entry.isImage ? 'simple' : entry.settings.faz,
+        primario: entry.settings.primario,
         acabado: entry.settings.acabado,
         r2_key: entry.r2Key,
       })),

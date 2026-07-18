@@ -1,19 +1,15 @@
 // Cálculo de precio — única fuente de verdad, corre en el servidor.
-// Reglas (confirmadas con el cliente):
+//
+// Reglas:
 //  - 1 página = 1 carilla, siempre (el faz simple/doble no cambia el conteo de carillas,
 //    es un dato operativo para el taller).
-//  - El producto "primario" (jerarquia = 'primario') se cobra por carilla × copias.
-//  - Cada archivo tiene UN acabado (Suelto / Abrochado / Anillado / Clip), que es un
-//    producto "secundario" independiente. Se cobra 1 vez por cada copia del archivo.
+//  - Cada archivo elige UN producto "primario" (jerarquia='primario') — ej. ByN o Color —
+//    y se cobra por carilla × copias. Puede haber más de un primario habilitado a la vez
+//    dentro de una categoría; el archivo tiene que indicar cuál eligió (a.primario, un código).
+//  - Cada archivo elige UN acabado (Suelto / Abrochado / Anillado / Clip), producto
+//    "secundario", independiente del primario. Se cobra 1 vez por cada copia del archivo.
+//  - Los productos se identifican por `codigo` (estable), nunca por `descripcion` (editable).
 //  - El precio final SIEMPRE se recalcula acá, nunca se confía en el total que manda el cliente.
-
-const ACABADO_A_DESCRIPCION = {
-  suelto: 'Sueltas',
-  abrochado: 'Abrochadas',
-  anillado: 'Anillados A4',
-  clip: 'Clip',
-};
-const DESCRIPCION_PRIMARIO = 'Impresión ByN A4 (carilla)';
 
 function contarPaginasEnRango(rango, totalPaginas) {
   totalPaginas = totalPaginas || 1;
@@ -34,15 +30,31 @@ function contarPaginasEnRango(rango, totalPaginas) {
   return set.size || totalPaginas;
 }
 
-// archivos: [{ paginas, copias, rango, acabado }]
-export async function calcularPrecio(db, archivos) {
-  const { results: productos } = await db
-    .prepare('SELECT id, descripcion, precio, jerarquia FROM productos WHERE habilitado = 1')
-    .all();
+// Trae el catálogo utilizable por una categoría: los productos propios de esa categoría
+// + los transversales (categoria_id NULL, ej. los acabados). Indexado por `codigo`.
+export async function catalogoDeCategoria(db, categoriaCodigo) {
+  const { results: productos } = await db.prepare(
+    `SELECT p.id, p.descripcion, p.precio, p.jerarquia, p.codigo
+       FROM productos p
+       LEFT JOIN categorias c ON c.id = p.categoria_id
+      WHERE p.habilitado = 1
+        AND (c.codigo = ? OR p.categoria_id IS NULL)`
+  ).bind(categoriaCodigo).all();
 
-  const porDescripcion = Object.fromEntries(productos.map(p => [p.descripcion, p]));
-  const primario = porDescripcion[DESCRIPCION_PRIMARIO];
-  if (!primario) throw new Error('Producto primario no configurado (' + DESCRIPCION_PRIMARIO + ')');
+  const porCodigo = Object.fromEntries(productos.filter(p => p.codigo).map(p => [p.codigo, p]));
+  const primarios = productos.filter(p => p.jerarquia === 'primario');
+  const secundarios = productos.filter(p => p.jerarquia === 'secundario');
+  return { productos, porCodigo, primarios, secundarios };
+}
+
+// archivos: [{ paginas, copias, rango, primario, acabado }]
+// primario / acabado son códigos de producto (ej. 'byn_a4', 'anillado').
+export async function calcularPrecio(db, archivos, categoriaCodigo) {
+  const { porCodigo, primarios } = await catalogoDeCategoria(db, categoriaCodigo);
+
+  if (!primarios.length) {
+    throw new Error(`No hay ningún producto primario habilitado para la categoría "${categoriaCodigo}".`);
+  }
 
   const items = [];
   let total = 0;
@@ -53,11 +65,16 @@ export async function calcularPrecio(db, archivos) {
     const paginasSeleccionadas = contarPaginasEnRango(a.rango, totalPaginas);
     const carillas = paginasSeleccionadas * copias;
 
+    const primario = porCodigo[a.primario];
+    if (!primario || primario.jerarquia !== 'primario') {
+      throw new Error(`Producto primario inválido o no disponible: "${a.primario || ''}"`);
+    }
     const subtotalPrimario = carillas * primario.precio;
 
-    const descSecundario = ACABADO_A_DESCRIPCION[a.acabado] || ACABADO_A_DESCRIPCION.suelto;
-    const secundario = porDescripcion[descSecundario];
-    if (!secundario) throw new Error('Producto secundario no configurado (' + descSecundario + ')');
+    const secundario = porCodigo[a.acabado];
+    if (!secundario || secundario.jerarquia !== 'secundario') {
+      throw new Error(`Acabado inválido o no disponible: "${a.acabado || ''}"`);
+    }
     const subtotalSecundario = copias * secundario.precio;
 
     const totalArchivo = subtotalPrimario + subtotalSecundario;
@@ -69,9 +86,10 @@ export async function calcularPrecio(db, archivos) {
       copias,
       carillas,
       producto_primario_id: primario.id,
+      producto_primario: primario.codigo,
       subtotal_primario: subtotalPrimario,
       producto_secundario_id: secundario.id,
-      producto_secundario: descSecundario,
+      producto_secundario: secundario.codigo,
       subtotal_secundario: subtotalSecundario,
       total: totalArchivo,
     });
