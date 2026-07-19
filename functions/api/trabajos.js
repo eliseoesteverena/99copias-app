@@ -1,5 +1,6 @@
 import { calcularPrecio } from './lib/precio.js';
 import { sanitizarNombreArchivo } from './lib/r2.js';
+import { horasMinimasRequeridas, cumpleAnticipacion } from './lib/produccion.js';
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -36,8 +37,16 @@ export async function onRequestPost({ request, env }) {
       objetosStaging.push(obj);
     }
 
-    // Chequeo de cupo antes de confirmar (protección básica contra sobreventa).
-    const turno = await db.prepare('SELECT capacidad_maxima FROM turnos_entrega WHERE id = ?').bind(turno_entrega_id).first();
+    // Precio recalculado en servidor — nunca se confía en el total del cliente.
+    // Lo hacemos acá (antes de validar el turno) porque necesitamos el total de
+    // carillas del pedido para saber cuántas horas de anticipación requiere.
+    const { items, total } = await calcularPrecio(db, archivos, categoria);
+    const carillasTotal = items.reduce((acc, it) => acc + it.carillas, 0);
+
+    // Turno: existencia, excepciones, cupo y — lo nuevo — tiempo mínimo de producción.
+    const turno = await db.prepare(
+      'SELECT hora_inicio, capacidad_maxima FROM turnos_entrega WHERE id = ?'
+    ).bind(turno_entrega_id).first();
     if (!turno) return Response.json({ error: 'El turno elegido ya no existe.' }, { status: 409 });
 
     const excepcion = await db.prepare(
@@ -46,6 +55,9 @@ export async function onRequestPost({ request, env }) {
     if (excepcion && excepcion.tipo === 'cancelado') {
       return Response.json({ error: 'Ese turno fue cancelado para la fecha elegida.' }, { status: 409 });
     }
+    const horaInicio = (excepcion && excepcion.tipo === 'horario_modificado' && excepcion.hora_inicio)
+      ? excepcion.hora_inicio
+      : turno.hora_inicio;
     const capacidadMaxima = (excepcion && excepcion.tipo === 'capacidad_modificada')
       ? excepcion.capacidad_maxima
       : turno.capacidad_maxima;
@@ -57,6 +69,13 @@ export async function onRequestPost({ request, env }) {
       if (ocupadosRow.n >= capacidadMaxima) {
         return Response.json({ error: 'Ese turno ya no tiene cupo disponible.' }, { status: 409 });
       }
+    }
+
+    const horasMinimas = await horasMinimasRequeridas(db, categoria, carillasTotal);
+    if (!cumpleAnticipacion(fecha_entrega, horaInicio, horasMinimas)) {
+      return Response.json({
+        error: `Este pedido (${carillasTotal} carillas) necesita al menos ${horasMinimas}hs de anticipación — elegí un turno más adelante.`,
+      }, { status: 409 });
     }
 
     // Upsert de cliente por (documento_tipo, documento_numero).
@@ -78,9 +97,6 @@ export async function onRequestPost({ request, env }) {
       ).bind(cliente.nombre, cliente.apellido, docTipo, cliente.documento_numero, cliente.email || null, cliente.celular || null, cliente.direccion || null).run();
       clienteId = insert.meta.last_row_id;
     }
-
-    // Precio recalculado en servidor — nunca se confía en el total del cliente.
-    const { items, total } = await calcularPrecio(db, archivos, categoria);
 
     const categoriaRow = await db.prepare('SELECT id FROM categorias WHERE codigo = ?').bind(categoria).first();
     const categoriaId = categoriaRow ? categoriaRow.id : null;

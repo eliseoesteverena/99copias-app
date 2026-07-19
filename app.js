@@ -112,7 +112,10 @@ async function apiPost(url, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error('Error de red (' + res.status + ')');
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || ('Error de red (' + res.status + ')'));
+  }
   return res.json();
 }
 
@@ -193,7 +196,10 @@ async function selectFecha(iso) {
   const grid = document.getElementById('slotGrid');
   grid.innerHTML = '<div class="empty">Buscando turnos…</div>';
   try {
-    const turnos = await apiGet(`/api/turnos?zona_id=${state.zona.id}&fecha=${iso}`);
+    let carillasTotal = 0;
+    files.forEach(entry => { carillasTotal += calcularArchivo(entry).carillas; });
+    const qs = new URLSearchParams({ zona_id: state.zona.id, fecha: iso, categoria: CATEGORIA, carillas: carillasTotal });
+    const turnos = await apiGet(`/api/turnos?${qs.toString()}`);
     if (!turnos.length) {
       grid.innerHTML = '<div class="empty">No hay turnos disponibles para esta fecha. Probá con otro día.</div>';
       updateNavState();
@@ -209,7 +215,7 @@ async function selectFecha(iso) {
       card.innerHTML = `
         <span class="day mono">${iso}</span>
         <div class="range">${t.hora_inicio} – ${t.hora_fin}</div>
-        <div class="cap">${full ? 'SIN CUPO' : (t.capacidad_maxima ? (t.capacidad_maxima - t.ocupados) + ' cupos' : 'cupo abierto')}</div>`;
+        <div class="cap">${full ? 'NO DISPONIBLE' : (t.capacidad_maxima ? (t.capacidad_maxima - t.ocupados) + ' cupos' : 'cupo abierto')}</div>`;
       if (!full) card.addEventListener('click', () => selectTurno(t, card));
       grid.appendChild(card);
     });
@@ -749,7 +755,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     iniciarPollingPago(trabajo_id);
   } catch (err) {
     console.error(err);
-    errEl.textContent = 'No pudimos generar el checkout. Intentá de nuevo en unos segundos.';
+    errEl.textContent = err.message || 'No pudimos generar el checkout. Intentá de nuevo en unos segundos.';
     errEl.style.display = 'flex';
     btn.disabled = false;
     btn.textContent = 'Ir a pagar con Mercado Pago →';
