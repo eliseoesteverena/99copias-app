@@ -191,7 +191,13 @@ input, select, textarea{ font-family:inherit; }
   text-transform:uppercase; letter-spacing:.04em; color:var(--ink-60);
 }
 .site-header-drawer-sublink{ padding-left:2rem; border-bottom:none; }
-.site-header-drawer-cta{ margin:1rem 1.25rem; }
+.site-header-drawer-cta{
+  display:block; width:100%;
+  margin:0; border-radius:0; box-shadow:none;
+  padding:1rem 1.25rem; text-align:left; justify-content:flex-start;
+  border-bottom: 1px solid var(--ink-08);
+}
+.site-header-drawer-cta:hover{ transform:none; }
 
 @media (min-width: 641px){
   .site-header-links{ display:flex; }
@@ -249,8 +255,8 @@ input, select, textarea{ font-family:inherit; }
 }
 .stepline .tick.is-done .n,
 .stepline .tick.is-done .lbl{ color: var(--ink-40); }
-.stepline .tick.is-active .n,
-.stepline .tick.is-active .lbl{ color: var(--ink); font-weight:700; }
+.stepline .tick.is-active .n{ color: var(--ink); font-weight:700; font-size:.78rem; }
+.stepline .tick.is-active .lbl{ color: var(--ink); font-weight:700; font-size:.74rem; }
 
 /* ---------------------------------------------------------
    PANELES / TARJETAS
@@ -357,11 +363,13 @@ input, select, textarea{ font-family:inherit; }
 .btn-primary{
   background: var(--ink); border-color: var(--ink); color:#fff;
   position:relative;
+  overflow:hidden;
+  padding-bottom: calc(.6rem + .3rem);
 }
 .btn-primary::after{
   content:'';
-  position:absolute; left:14%; right:14%; bottom:-.45rem;
-  height:.3rem; border-radius: var(--r-full);
+  position:absolute; left:0; right:0; bottom:0;
+  height:.3rem;
   background: var(--grad);
 }
 .btn-outline{ background:var(--card); }
@@ -544,7 +552,7 @@ input, select, textarea{ font-family:inherit; }
 
 @media (max-width:640px){
   .shell{ padding:1rem .9rem 6.5rem; }
-  .stepline .tick .lbl{ display:none; }
+  .stepline .tick:not(.is-active) .lbl{ display:none; }
   .file-card-head{ grid-template-columns:3.5rem 1fr auto; }
   .receipt-total .amount{ font-size:1.4rem; }
 }
