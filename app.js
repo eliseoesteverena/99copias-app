@@ -97,6 +97,8 @@ function calcularTotalPedido() {
 }
 
 function money(n) {
+  n = Number(n);
+  if (!Number.isFinite(n)) n = 0; // defensa: nunca mostrar $NaN si algún dato viene incompleto
   return '$' + Math.round(n).toLocaleString('es-AR');
 }
 

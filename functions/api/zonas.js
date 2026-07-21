@@ -1,7 +1,7 @@
 export async function onRequestGet({ env }) {
   try {
     const { results } = await env.DB
-      .prepare('SELECT id, nombre FROM zonas WHERE activa = 1 ORDER BY nombre')
+      .prepare('SELECT id, nombre, precio_envio, es_retiro FROM zonas WHERE activa = 1 ORDER BY es_retiro DESC, nombre')
       .all();
     return Response.json(results);
   } catch (err) {
