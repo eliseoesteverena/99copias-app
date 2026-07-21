@@ -59,10 +59,10 @@
   --line: 1.5px solid var(--ink);
   --line-soft: 1.5px solid var(--ink-15);
 
-  --r-full: 999px;
-  --r-lg: 1.5rem;
-  --r-md: 1rem;
-  --r-sm: .6rem;
+  --r-full: 999px;   /* reservado para el logo únicamente, ya no para botones/segmented */
+  --r-lg: .85rem;
+  --r-md: .5rem;
+  --r-sm: .4rem;
 
   --shadow: 4px 4px 0 var(--ink);
   --shadow-sm: 3px 3px 0 var(--ink);
@@ -123,44 +123,38 @@ input, select, textarea{ font-family:inherit; }
 }
 
 /* ---------------------------------------------------------
-   REGLA DE PASOS — pills en fila
+   REGLA DE PASOS — sin bordes ni fondo, solo color/peso
    --------------------------------------------------------- */
 .stepline{
   display:flex;
-  gap:.5rem;
+  gap:1.5rem;
   overflow-x:auto;
   margin-bottom: 2rem;
-  padding-bottom:.15rem;
+  padding-bottom:.85rem;
+  border-bottom: 1px solid var(--ink-08);
 }
 .stepline .tick{
-  flex: 1 1 0;
-  min-width:5rem;
-  text-align:center;
-  border: var(--line);
-  border-radius: var(--r-full);
-  background: var(--card);
-  padding: .55rem .4rem;
+  flex: 0 0 auto;
+  text-align:left;
 }
 .stepline .tick .n{
   display:block;
   font-family: var(--font-mono);
   font-size:.65rem;
-  color: var(--ink-40);
+  color: var(--ink-15);
   margin-bottom:.1rem;
 }
 .stepline .tick .lbl{
   font-size:.66rem;
   letter-spacing:.04em;
   text-transform:uppercase;
-  color: var(--ink-40);
+  color: var(--ink-15);
   font-weight:600;
 }
-.stepline .tick.is-active{ background: var(--ink); box-shadow: var(--shadow-sm); }
-.stepline .tick.is-active .n,
-.stepline .tick.is-active .lbl{ color:#fff; }
-.stepline .tick.is-done{ background: var(--mint); }
 .stepline .tick.is-done .n,
-.stepline .tick.is-done .lbl{ color: var(--ink); }
+.stepline .tick.is-done .lbl{ color: var(--ink-40); }
+.stepline .tick.is-active .n,
+.stepline .tick.is-active .lbl{ color: var(--ink); font-weight:700; }
 
 /* ---------------------------------------------------------
    PANELES / TARJETAS
@@ -251,7 +245,7 @@ input, select, textarea{ font-family:inherit; }
   display:inline-flex; align-items:center; justify-content:center;
   gap:.4rem;
   border: var(--line);
-  border-radius: var(--r-full);
+  border-radius: var(--r-md);
   background: var(--card);
   color: var(--ink);
   padding: .6rem 1.25rem;
@@ -305,7 +299,7 @@ input, select, textarea{ font-family:inherit; }
 .checkline input{ width:1.1rem; height:1.1rem; accent-color:var(--ink); }
 
 .segmented{
-  display:inline-flex; border: var(--line); border-radius: var(--r-full);
+  display:inline-flex; border: var(--line); border-radius: var(--r-md);
   overflow:hidden; max-width:100%; background:var(--card);
 }
 .segmented button{
@@ -353,14 +347,14 @@ input, select, textarea{ font-family:inherit; }
 .upload-status{
   display:inline-flex; align-items:center; gap:.4rem;
   font-family:var(--font-mono); font-size:.66rem; margin-top:.35rem;
-  padding:.15rem .55rem; border-radius:var(--r-full);
+  padding:.15rem .55rem; border-radius:var(--r-sm);
 }
 .upload-status.is-uploading{ color:var(--ink-60); background:var(--yellow-pale); }
 .upload-status.is-ok{ color:#0a7a3d; background:var(--mint); }
 .upload-status.is-error{ color:var(--danger); background:var(--danger-pale); flex-wrap:wrap; }
 .upload-status .btn{ padding:.15rem .5rem; font-size:.66rem; box-shadow:none; }
 .file-remove{
-  border:var(--line-soft); border-radius:var(--r-full); background:var(--card); width:1.9rem; height:1.9rem;
+  border:var(--line-soft); border-radius:var(--r-sm); background:var(--card); width:1.9rem; height:1.9rem;
   display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-60);
   flex-shrink:0;
 }
@@ -378,7 +372,7 @@ input, select, textarea{ font-family:inherit; }
 }
 .dim-line .tickmark{ color:var(--ink-15); }
 .dim-line .result{ margin-left:auto; color:var(--ink); font-weight:600; }
-.dim-line .result .amt{ color:var(--ink); background:var(--yellow); padding:.05rem .45rem; border-radius:var(--r-full); }
+.dim-line .result .amt{ color:var(--ink); background:var(--yellow); padding:.05rem .45rem; border-radius:var(--r-sm); }
 
 /* ---------------------------------------------------------
    TURNOS
