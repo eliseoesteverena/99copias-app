@@ -62,8 +62,8 @@ function renderHeader(selector, config) {
           Menú <span class="site-header-toggle-icon">☰</span>
         </button>
       </nav>
+      <div class="site-header-drawer"></div>
     </div>
-    <div class="site-header-drawer"></div>
   `;
 
   const listaDesktop = cont.querySelector('.site-header-links');
