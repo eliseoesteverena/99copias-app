@@ -1,6 +1,7 @@
 import { calcularPrecio } from './lib/precio.js';
 import { sanitizarNombreArchivo } from './lib/r2.js';
 import { horasMinimasRequeridas, cumpleAnticipacion } from './lib/produccion.js';
+import { calcularEnvio } from './lib/envio.js';
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -101,12 +102,18 @@ export async function onRequestPost({ request, env }) {
     const categoriaRow = await db.prepare('SELECT id FROM categorias WHERE codigo = ?').bind(categoria).first();
     const categoriaId = categoriaRow ? categoriaRow.id : null;
 
+    // Envío: precio de la zona con el descuento por volumen que corresponda —
+    // o $0 si la zona es "retiro en local". Se recalcula acá, nunca se confía en
+    // lo que mande el cliente, y queda congelado en el pedido.
+    const { con_envio, costo_envio } = await calcularEnvio(db, zona_id, categoria, carillasTotal);
+    const totalConEnvio = total + costo_envio;
+
     const configuracionInicial = JSON.stringify({ archivos, items });
 
     const insertTrabajo = await db.prepare(
-      `INSERT INTO trabajos (cliente_id, configuracion, estado, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, categoria_id, pagado)
-       VALUES (?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, 0)`
-    ).bind(clienteId, configuracionInicial, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, categoriaId).run();
+      `INSERT INTO trabajos (cliente_id, configuracion, estado, total, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, categoria_id, con_envio, costo_envio, pagado)
+       VALUES (?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+    ).bind(clienteId, configuracionInicial, totalConEnvio, direccion_entrega, fecha_entrega, zona_id, turno_entrega_id, categoriaId, con_envio ? 1 : 0, costo_envio).run();
 
     const trabajoId = insertTrabajo.meta.last_row_id;
 
@@ -137,7 +144,7 @@ export async function onRequestPost({ request, env }) {
       .bind(JSON.stringify({ archivos: archivosConfirmados, items }), trabajoId)
       .run();
 
-    return Response.json({ trabajo_id: trabajoId, total, items });
+    return Response.json({ trabajo_id: trabajoId, total: totalConEnvio, subtotal_impresion: total, con_envio, costo_envio, items });
   } catch (err) {
     console.error(err);
     return Response.json({ error: err.message || 'No se pudo crear el trabajo.' }, { status: 500 });

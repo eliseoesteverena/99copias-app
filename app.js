@@ -73,7 +73,9 @@ function labelProducto(p) {
 function calcularArchivo(entry) {
   const paginas = entry.isImage ? 1 : contarPaginasEnRango(entry.settings.rango, entry.numPages || 1);
   const copias = entry.settings.copias || 1;
-  const carillas = paginas * copias;
+  const paginasPorCarilla = entry.isImage ? 1 : (entry.settings.paginasPorCarilla || 1);
+  const hojasFisicas = Math.ceil(paginas / paginasPorCarilla);
+  const carillas = hojasFisicas * copias;
 
   const precioPrimario = precioPorCodigo(entry.settings.primario);
   const subtotalPrimario = carillas * precioPrimario;
@@ -82,7 +84,7 @@ function calcularArchivo(entry) {
   const subtotalSecundario = copias * precioSecundario;
 
   return {
-    paginas, copias, carillas,
+    paginas, copias, paginasPorCarilla, hojasFisicas, carillas,
     subtotalPrimario, subtotalSecundario,
     total: subtotalPrimario + subtotalSecundario,
   };
@@ -146,8 +148,12 @@ async function loadZonas() {
     zonas.forEach(z => {
       const card = document.createElement('button');
       card.type = 'button';
-      card.className = 'zone-card' + (state.zona && state.zona.id === z.id ? ' is-selected' : '');
-      card.innerHTML = `<span class="zn mono">ZONA ${String(z.id).padStart(2, '0')}</span><div class="name">${z.nombre}</div>`;
+      card.className = 'zone-card' + (z.es_retiro ? ' is-retiro' : '') + (state.zona && state.zona.id === z.id ? ' is-selected' : '');
+      const envioLabel = z.es_retiro ? 'Sin costo' : money(z.precio_envio);
+      card.innerHTML = `
+        <span class="zn mono">${z.es_retiro ? 'RETIRO' : 'ZONA ' + String(z.id).padStart(2, '0')}</span>
+        <div class="name">${z.nombre}</div>
+        <div class="zn mono" style="margin-top:.4rem;">Envío: ${envioLabel}</div>`;
       card.addEventListener('click', () => selectZona(z));
       grid.appendChild(card);
     });
@@ -160,7 +166,7 @@ async function loadZonas() {
 }
 
 function selectZona(z) {
-  state.zona = { id: z.id, nombre: z.nombre };
+  state.zona = { id: z.id, nombre: z.nombre, precio_envio: z.precio_envio, es_retiro: !!z.es_retiro };
   localStorage.setItem(LS_ZONA, JSON.stringify(state.zona));
   document.querySelectorAll('.zone-card').forEach(c => c.classList.remove('is-selected'));
   document.getElementById('zoneGrid').querySelectorAll('.zone-card').forEach(c => {
@@ -243,6 +249,7 @@ function readGlobalSettings() {
     faz: document.querySelector('#gFaz button.is-on').dataset.value,
     acabado: document.querySelector('#gAcabado button.is-on').dataset.value,
     primario: primarioBtn ? primarioBtn.dataset.value : (primariosDisponibles()[0] || {}).codigo,
+    paginasPorCarilla: parseInt(document.querySelector('#gPaginasPorCarilla button.is-on').dataset.value, 10) || 1,
     rango: '',
   };
 }
@@ -396,14 +403,18 @@ function labelSecundario(p) {
   return map[p.codigo] || p.descripcion;
 }
 
-// Páginas que realmente se van a imprimir de este archivo (respeta el rango elegido).
-function paginasActualesDe(entry) {
-  return entry.isImage ? 1 : contarPaginasEnRango(entry.settings.rango, entry.numPages || 1);
+// Hojas físicas que realmente se imprimen por copia de este archivo — respeta el
+// rango elegido Y la imposición (páginas por carilla). Esto es lo que se anilla/
+// abrocha, no las páginas lógicas.
+function hojasFisicasDe(entry) {
+  const paginas = entry.isImage ? 1 : contarPaginasEnRango(entry.settings.rango, entry.numPages || 1);
+  const paginasPorCarilla = entry.isImage ? 1 : (entry.settings.paginasPorCarilla || 1);
+  return Math.ceil(paginas / paginasPorCarilla);
 }
 
 function acabadoPermitido(entry, secundario) {
-  const paginas = paginasActualesDe(entry);
-  return !secundario.paginas_minimas || paginas >= secundario.paginas_minimas;
+  const hojas = hojasFisicasDe(entry);
+  return !secundario.paginas_minimas || hojas >= secundario.paginas_minimas;
 }
 
 function renderAcabadoBotones(entry) {
@@ -411,18 +422,19 @@ function renderAcabadoBotones(entry) {
     const permitido = acabadoPermitido(entry, s);
     const isOn = entry.settings.acabado === s.codigo;
     return `<button type="button" data-value="${s.codigo}"
-      class="${isOn ? 'is-on' : ''}" ${permitido ? '' : 'disabled title="Necesita al menos ' + s.paginas_minimas + ' páginas seleccionadas"'}
+      class="${isOn ? 'is-on' : ''}" ${permitido ? '' : 'disabled title="Necesita al menos ' + s.paginas_minimas + ' hojas físicas por copia"'}
       >${labelSecundario(s)}</button>`;
   }).join('');
 }
 
 // Debajo del segmented, un aviso puntual si el acabado elegido justo dejó de ser válido
-// (ej. el cliente achicó el rango de páginas después de haber elegido "Anillado").
+// (ej. el cliente achicó el rango de páginas, o subió páginas-por-carilla, después de
+// haber elegido "Anillado").
 function acabadoBloqueadoHint(entry) {
   const actual = productoPorCodigo(entry.settings.acabado);
   if (actual && !acabadoPermitido(entry, actual)) {
     return `<p class="hint" style="color:var(--danger); margin-top:.4rem;">
-      "${labelSecundario(actual)}" necesita al menos ${actual.paginas_minimas} páginas — con ${paginasActualesDe(entry)} no está disponible.
+      "${labelSecundario(actual)}" necesita al menos ${actual.paginas_minimas} hojas físicas por copia — con ${hojasFisicasDe(entry)} no está disponible.
     </p>`;
   }
   return '';
@@ -465,6 +477,15 @@ function renderFileList() {
             <button type="button" data-value="simple" class="${entry.settings.faz === 'simple' ? 'is-on' : ''}">Simple</button>
             <button type="button" data-value="doble" class="${entry.settings.faz === 'doble' ? 'is-on' : ''}">Doble</button>
           </div>
+        </div>
+        <div class="field">
+          <label>Páginas por carilla</label>
+          <div class="segmented" data-id="${id}" data-field="paginasPorCarilla">
+            <button type="button" data-value="1" class="${(entry.settings.paginasPorCarilla || 1) === 1 ? 'is-on' : ''}">1</button>
+            <button type="button" data-value="2" class="${entry.settings.paginasPorCarilla === 2 ? 'is-on' : ''}">2</button>
+            <button type="button" data-value="4" class="${entry.settings.paginasPorCarilla === 4 ? 'is-on' : ''}">4</button>
+            <button type="button" data-value="6" class="${entry.settings.paginasPorCarilla === 6 ? 'is-on' : ''}">6</button>
+          </div>
         </div>`}
         <div class="field">
           <label>Tipo de impresión</label>
@@ -484,7 +505,7 @@ function renderFileList() {
       </div>
       <div class="dim-line" id="dim-${id}">
         <span class="tickmark">⊢</span>
-        <span>${calc.paginas} pág. × ${calc.copias} = ${calc.carillas} carillas</span>
+        <span>${calc.paginasPorCarilla > 1 ? `${calc.paginas} pág. ÷ ${calc.paginasPorCarilla} = ${calc.hojasFisicas} hojas × ${calc.copias} = ${calc.carillas} carillas` : `${calc.paginas} pág. × ${calc.copias} = ${calc.carillas} carillas`}</span>
         <span class="tickmark">⊣</span>
         <span class="result">${labelProductoActual(entry)} · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span></span>
       </div>
@@ -507,7 +528,9 @@ function renderFileList() {
       if (!btn || btn.disabled) return;
       group.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
       btn.classList.add('is-on');
-      files.get(group.dataset.id).settings[group.dataset.field] = btn.dataset.value;
+      const campo = group.dataset.field;
+      const valor = campo === 'paginasPorCarilla' ? parseInt(btn.dataset.value, 10) : btn.dataset.value;
+      files.get(group.dataset.id).settings[campo] = valor;
       updateDim(group.dataset.id);
     });
   });
@@ -556,7 +579,10 @@ function updateDim(id) {
   const calc = calcularArchivo(entry);
   const el = document.getElementById('dim-' + id);
   if (el) {
-    el.querySelector('span:nth-child(2)').textContent = `${calc.paginas} pág. × ${calc.copias} = ${calc.carillas} carillas`;
+    const detalle = calc.paginasPorCarilla > 1
+      ? `${calc.paginas} pág. ÷ ${calc.paginasPorCarilla} = ${calc.hojasFisicas} hojas × ${calc.copias} = ${calc.carillas} carillas`
+      : `${calc.paginas} pág. × ${calc.copias} = ${calc.carillas} carillas`;
+    el.querySelector('span:nth-child(2)').textContent = detalle;
     el.querySelector('.result').innerHTML = `${labelProductoActual(entry)} · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span>`;
   }
 
@@ -577,7 +603,7 @@ function updateDim(id) {
 
 // Los segmented de la configuración global (arriba de la lista de archivos) necesitan
 // su propio listener para togglear is-on — son distintos de los de cada tarjeta.
-document.querySelectorAll('#gAcabado, #gFaz, #gPrimario').forEach(group => {
+document.querySelectorAll('#gAcabado, #gFaz, #gPrimario, #gPaginasPorCarilla').forEach(group => {
   group.addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -590,7 +616,7 @@ document.getElementById('btnApplyAll').addEventListener('click', () => {
   const g = readGlobalSettings();
   const bloqueados = [];
   files.forEach(entry => {
-    entry.settings = { ...entry.settings, copias: g.copias, faz: g.faz, primario: g.primario };
+    entry.settings = { ...entry.settings, copias: g.copias, faz: g.faz, primario: g.primario, paginasPorCarilla: g.paginasPorCarilla };
     const secundarioElegido = productoPorCodigo(g.acabado);
     if (secundarioElegido && acabadoPermitido(entry, secundarioElegido)) {
       entry.settings.acabado = g.acabado;
@@ -603,7 +629,7 @@ document.getElementById('btnApplyAll').addEventListener('click', () => {
 
   const alertEl = document.getElementById('rejectedAlert');
   if (bloqueados.length) {
-    alertEl.textContent = `"${labelSecundario(productoPorCodigo(g.acabado))}" necesita al menos ${productoPorCodigo(g.acabado).paginas_minimas} páginas — quedó en "Suelto" para: ${bloqueados.join(', ')}`;
+    alertEl.textContent = `"${labelSecundario(productoPorCodigo(g.acabado))}" necesita al menos ${productoPorCodigo(g.acabado).paginas_minimas} hojas físicas por copia — quedó en "Suelto" para: ${bloqueados.join(', ')}`;
     alertEl.style.display = 'flex';
   } else {
     alertEl.style.display = 'none';
@@ -688,11 +714,13 @@ function direccionEntregaFinal() {
 /* =========================================================
    PASO 5 — resumen y pago
    ========================================================= */
-function renderResumenFinal() {
+async function renderResumenFinal() {
   const body = document.getElementById('finalBody');
   body.innerHTML = '';
+  let carillasTotal = 0;
   files.forEach(entry => {
     const calc = calcularArchivo(entry);
+    carillasTotal += calc.carillas;
     const row = document.createElement('div');
     row.className = 'receipt-row';
     row.innerHTML = `
@@ -704,7 +732,28 @@ function renderResumenFinal() {
     body.appendChild(row);
   });
   document.getElementById('finalCount').textContent = files.size + (files.size === 1 ? ' archivo' : ' archivos');
-  document.getElementById('finalTotal').textContent = money(calcularTotalPedido());
+
+  const subtotalImpresion = calcularTotalPedido();
+  document.getElementById('finalTotal').textContent = money(subtotalImpresion); // valor provisorio mientras llega el envío
+
+  try {
+    const qs = new URLSearchParams({ zona_id: state.zona.id, categoria: CATEGORIA, carillas: carillasTotal });
+    const envio = await apiGet('/api/envio?' + qs.toString());
+
+    const rowEnvio = document.createElement('div');
+    rowEnvio.className = 'receipt-row';
+    const etiquetaEnvio = envio.con_envio
+      ? `Envío a ${state.zona.nombre}${envio.descuento_porcentaje ? ` (−${envio.descuento_porcentaje}% por volumen)` : ''}`
+      : 'Retiro en local';
+    rowEnvio.innerHTML = `<div><div class="name">${etiquetaEnvio}</div></div><div class="val">${money(envio.costo_envio)}</div>`;
+    body.appendChild(rowEnvio);
+
+    document.getElementById('finalTotal').textContent = money(subtotalImpresion + envio.costo_envio);
+  } catch (err) {
+    console.error('No se pudo calcular el envío:', err);
+    // El total mostrado queda sin envío; el servidor lo va a calcular igual al confirmar,
+    // así que no bloquea el pago — solo el preview queda incompleto.
+  }
 }
 
 document.getElementById('btnPagar').addEventListener('click', async () => {
@@ -728,6 +777,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
         copias: entry.settings.copias,
         rango: entry.isImage ? '' : (entry.settings.rango || ''),
         faz: entry.isImage ? 'simple' : entry.settings.faz,
+        paginas_por_carilla: entry.isImage ? 1 : (entry.settings.paginasPorCarilla || 1),
         primario: entry.settings.primario,
         acabado: entry.settings.acabado,
         r2_key: entry.r2Key,
@@ -791,9 +841,8 @@ function updateNavState() {
   btnNext.disabled = !stepValido(state.step);
 
   const peek = document.getElementById('pricePeek');
-  peek.textContent = files.size > 0 ? 'Total estimado: ' : '';
   if (files.size > 0) {
-    peek.innerHTML = 'Estimado: <span class="amt">' + money(calcularTotalPedido()) + '</span>';
+    peek.innerHTML = '<span class="amt">' + money(calcularTotalPedido()) + '</span>';
   } else {
     peek.textContent = '';
   }

@@ -212,6 +212,8 @@ input, select, textarea{ font-family:inherit; }
   transition: background .12s ease, color .12s ease, transform .08s ease, box-shadow .08s ease;
 }
 .zone-card:hover{ transform:translate(1px,1px); box-shadow:1px 1px 0 var(--ink); }
+.zone-card.is-retiro{ grid-column: 1 / -1; background: var(--yellow-pale); }
+.zone-card.is-retiro.is-selected{ background: var(--ink); }
 .zone-card .zn{ font-family:var(--font-mono); font-size:.68rem; color:var(--ink-40); }
 .zone-card .name{ font-weight:600; margin-top:.3rem; font-size:1.05rem; font-family:var(--font-serif); }
 .zone-card.is-selected{ background: var(--ink); color:#fff; }
