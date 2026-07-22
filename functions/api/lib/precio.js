@@ -3,13 +3,20 @@
 // Reglas:
 //  - 1 página = 1 carilla, siempre (el faz simple/doble no cambia el conteo de carillas,
 //    es un dato operativo para el taller).
+//  - "Páginas por carilla" (1/2/4/6) es imposición: cuántas páginas lógicas entran en una
+//    hoja física. hojas_fisicas = ceil(páginas_del_rango / páginas_por_carilla) — es lo que
+//    efectivamente se imprime y se factura por copia. carillas = hojas_fisicas × copias.
 //  - Cada archivo elige UN producto "primario" (jerarquia='primario') — ej. ByN o Color —
 //    y se cobra por carilla × copias. Puede haber más de un primario habilitado a la vez
 //    dentro de una categoría; el archivo tiene que indicar cuál eligió (a.primario, un código).
 //  - Cada archivo elige UN acabado (Suelto / Abrochado / Anillado / Clip), producto
 //    "secundario", independiente del primario. Se cobra 1 vez por cada copia del archivo.
+//    El mínimo de páginas de un acabado (ej. Anillado) se compara contra las HOJAS FÍSICAS
+//    por copia, no contra las páginas lógicas — lo que se anilla son hojas, no páginas.
 //  - Los productos se identifican por `codigo` (estable), nunca por `descripcion` (editable).
 //  - El precio final SIEMPRE se recalcula acá, nunca se confía en el total que manda el cliente.
+
+const PAGINAS_POR_CARILLA_VALIDAS = [1, 2, 4, 6];
 
 function contarPaginasEnRango(rango, totalPaginas) {
   totalPaginas = totalPaginas || 1;
@@ -47,7 +54,7 @@ export async function catalogoDeCategoria(db, categoriaCodigo) {
   return { productos, porCodigo, primarios, secundarios };
 }
 
-// archivos: [{ paginas, copias, rango, primario, acabado }]
+// archivos: [{ paginas, copias, rango, primario, acabado, paginas_por_carilla }]
 // primario / acabado son códigos de producto (ej. 'byn_a4', 'anillado').
 export async function calcularPrecio(db, archivos, categoriaCodigo) {
   const { porCodigo, primarios } = await catalogoDeCategoria(db, categoriaCodigo);
@@ -63,7 +70,13 @@ export async function calcularPrecio(db, archivos, categoriaCodigo) {
     const totalPaginas = Math.max(1, parseInt(a.paginas, 10) || 1);
     const copias = Math.max(1, parseInt(a.copias, 10) || 1);
     const paginasSeleccionadas = contarPaginasEnRango(a.rango, totalPaginas);
-    const carillas = paginasSeleccionadas * copias;
+
+    const paginasPorCarilla = parseInt(a.paginas_por_carilla, 10) || 1;
+    if (!PAGINAS_POR_CARILLA_VALIDAS.includes(paginasPorCarilla)) {
+      throw new Error(`Páginas por carilla inválido: "${a.paginas_por_carilla || ''}" (válidos: ${PAGINAS_POR_CARILLA_VALIDAS.join(', ')})`);
+    }
+    const hojasFisicas = Math.ceil(paginasSeleccionadas / paginasPorCarilla);
+    const carillas = hojasFisicas * copias;
 
     const primario = porCodigo[a.primario];
     if (!primario || primario.jerarquia !== 'primario') {
@@ -75,9 +88,9 @@ export async function calcularPrecio(db, archivos, categoriaCodigo) {
     if (!secundario || secundario.jerarquia !== 'secundario') {
       throw new Error(`Acabado inválido o no disponible: "${a.acabado || ''}"`);
     }
-    if (secundario.paginas_minimas && paginasSeleccionadas < secundario.paginas_minimas) {
+    if (secundario.paginas_minimas && hojasFisicas < secundario.paginas_minimas) {
       throw new Error(
-        `"${a.nombre || 'Un archivo'}" tiene ${paginasSeleccionadas} página(s) seleccionada(s), ` +
+        `"${a.nombre || 'Un archivo'}" tiene ${hojasFisicas} hoja(s) física(s) por copia, ` +
         `pero "${secundario.descripcion}" requiere un mínimo de ${secundario.paginas_minimas}.`
       );
     }
@@ -89,6 +102,8 @@ export async function calcularPrecio(db, archivos, categoriaCodigo) {
     items.push({
       nombre: a.nombre || null,
       paginas: paginasSeleccionadas,
+      paginas_por_carilla: paginasPorCarilla,
+      hojas_fisicas: hojasFisicas,
       copias,
       carillas,
       producto_primario_id: primario.id,
