@@ -42,6 +42,12 @@
     <div class="zone-grid" id="zoneGrid">
       <div class="empty">Cargando zonas…</div>
     </div>
+    <div class="plate is-focused" id="wrapDireccion" style="display:none; margin-top:1.15rem;">
+      <div class="field">
+        <label for="direccionEntrega">Dirección de entrega</label>
+        <input class="input" id="direccionEntrega" placeholder="Calle, número, piso/depto, referencias">
+      </div>
+    </div>
   </section>
 
   <!-- ================= PASO 2 · ARCHIVOS ================= -->
@@ -149,24 +155,6 @@
         <div class="field"><label for="cEmail">Correo electrónico</label><input class="input" type="email" id="cEmail"></div>
         <div class="field"><label for="cCelular">Celular</label><input class="input" id="cCelular" placeholder="+54 9 ..."></div>
       </div>
-
-      <div class="field span-2" style="margin-top:1.25rem;">
-        <label class="checkline">
-          <input type="checkbox" id="cDireccionDistinta">
-          Entregar en una dirección distinta a la mía
-        </label>
-      </div>
-
-      <div class="form-grid" style="margin-top:.75rem;">
-        <div class="field span-2">
-          <label for="cDireccion" id="lblDireccion">Dirección</label>
-          <input class="input" id="cDireccion" placeholder="Calle, número, piso/depto, referencias">
-        </div>
-        <div class="field span-2" id="wrapDireccionEntrega" style="display:none;">
-          <label for="cDireccionEntrega">Dirección de entrega</label>
-          <input class="input" id="cDireccionEntrega" placeholder="Calle, número, piso/depto, referencias">
-        </div>
-      </div>
     </div>
   </section>
 
@@ -233,6 +221,7 @@
   <span class="price-peek" id="pricePeek"></span>
   <button type="button" class="btn btn-primary" id="btnNext">Continuar →</button>
 </div>
+
 
 <script src="header-footer.js"></script>
 <script>

@@ -3,6 +3,7 @@
    ========================================================= */
 const LS_ZONA = 'imprenta.zona';
 const LS_CLIENTE = 'imprenta.cliente';
+const LS_DIRECCION = 'imprenta.direccion';
 
 const state = {
   step: 1,
@@ -11,7 +12,7 @@ const state = {
   fecha: null,              // 'YYYY-MM-DD' elegida
   turno: null,              // objeto turno elegido
   cliente: JSON.parse(localStorage.getItem(LS_CLIENTE) || 'null'),
-  direccionDistinta: false,
+  // (dirección de entrega ya no vive en el state — se lee directo del input del Paso 1)
   // Todos los archivos de este pedido suben bajo la misma carpeta de staging en R2
   // (staging/{sesionSubida}/...) — se confirman o se limpian juntos.
   sesionSubida: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
@@ -159,6 +160,16 @@ async function loadZonas() {
       card.addEventListener('click', () => selectZona(z));
       grid.appendChild(card);
     });
+
+    // Si ya había una zona guardada de una visita anterior, restauramos también
+    // el estado del campo de dirección (mostrado/oculto + prefill).
+    if (state.zona) {
+      const wrapDireccion = document.getElementById('wrapDireccion');
+      wrapDireccion.style.display = state.zona.es_retiro ? 'none' : 'block';
+      if (!state.zona.es_retiro) {
+        document.getElementById('direccionEntrega').value = localStorage.getItem(LS_DIRECCION) || '';
+      }
+    }
   } catch (err) {
     console.error(err);
     document.getElementById('zoneAlert').textContent = 'No pudimos cargar las zonas de entrega. Probá recargar la página.';
@@ -174,6 +185,12 @@ function selectZona(z) {
   document.getElementById('zoneGrid').querySelectorAll('.zone-card').forEach(c => {
     if (c.querySelector('.name').textContent === z.nombre) c.classList.add('is-selected');
   });
+
+  const wrapDireccion = document.getElementById('wrapDireccion');
+  wrapDireccion.style.display = z.es_retiro ? 'none' : 'block';
+  if (!z.es_retiro && !document.getElementById('direccionEntrega').value) {
+    document.getElementById('direccionEntrega').value = localStorage.getItem(LS_DIRECCION) || '';
+  }
   updateNavState();
 }
 
@@ -670,19 +687,12 @@ function prefillCliente() {
   document.getElementById('cDocNumero').value = c.documento_numero || '';
   document.getElementById('cEmail').value = c.email || '';
   document.getElementById('cCelular').value = c.celular || '';
-  document.getElementById('cDireccion').value = c.direccion || '';
 }
 
-document.getElementById('cDireccionDistinta').addEventListener('change', e => {
-  state.direccionDistinta = e.target.checked;
-  document.getElementById('wrapDireccionEntrega').style.display = e.target.checked ? 'flex' : 'none';
-  document.getElementById('lblDireccion').textContent = e.target.checked ? 'Dirección (tu domicilio)' : 'Dirección';
-  updateNavState();
-});
-
 // El botón "Continuar" depende de que el formulario esté completo — hay que
-// revalidarlo en cada tecleo, no solo cuando se toca el checkbox de dirección.
+// revalidarlo en cada tecleo.
 document.getElementById('panel-4').addEventListener('input', updateNavState);
+document.getElementById('direccionEntrega').addEventListener('input', updateNavState);
 
 function readClienteForm() {
   return {
@@ -692,25 +702,19 @@ function readClienteForm() {
     documento_numero: document.getElementById('cDocNumero').value.trim(),
     email: document.getElementById('cEmail').value.trim(),
     celular: document.getElementById('cCelular').value.trim(),
-    direccion: document.getElementById('cDireccion').value.trim(),
   };
 }
 
 function clienteFormValido() {
   const c = readClienteForm();
-  const base = c.nombre && c.apellido && c.documento_numero && c.direccion;
-  if (!base) return false;
-  if (state.direccionDistinta) {
-    return !!document.getElementById('cDireccionEntrega').value.trim();
-  }
-  return true;
+  return !!(c.nombre && c.apellido && c.documento_numero);
 }
 
+// "Retiro en local" no necesita dirección — queda un valor fijo y legible
+// para vos al mirar el pedido, en vez de un campo vacío.
 function direccionEntregaFinal() {
-  const c = readClienteForm();
-  return state.direccionDistinta
-    ? document.getElementById('cDireccionEntrega').value.trim()
-    : c.direccion;
+  if (state.zona && state.zona.es_retiro) return 'Retiro en local';
+  return document.getElementById('direccionEntrega').value.trim();
 }
 
 /* =========================================================
@@ -790,6 +794,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     const { init_point } = await apiPost('/api/checkout', { trabajo_id });
 
     localStorage.setItem(LS_CLIENTE, JSON.stringify(payload.cliente));
+    if (!state.zona.es_retiro) localStorage.setItem(LS_DIRECCION, payload.direccion_entrega);
     state.trabajoIdPago = trabajo_id;
 
     // No redirigimos directo: en desktop es común no estar logueado en MP.
@@ -819,7 +824,10 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
    ========================================================= */
 function stepValido(n) {
   switch (n) {
-    case 1: return !!state.zona;
+    case 1:
+      if (!state.zona) return false;
+      if (state.zona.es_retiro) return true;
+      return !!document.getElementById('direccionEntrega').value.trim();
     case 2: return files.size > 0 && [...files.values()].every(e => e.r2Key && !e.subiendo && !e.errorSubida);
     case 3: return !!(state.fecha && state.turno);
     case 4: return clienteFormValido();
@@ -835,12 +843,15 @@ function updateStepline() {
   });
 }
 
+const ETIQUETA_SIGUIENTE_PASO = { 1: 'Archivos', 2: 'Turno', 3: 'Datos', 4: 'Pago' };
+
 function updateNavState() {
   document.getElementById('btnBack').style.visibility = state.step === 1 ? 'hidden' : 'visible';
   const btnNext = document.getElementById('btnNext');
   const isLast = state.step === 5;
   btnNext.style.display = isLast ? 'none' : 'inline-flex';
   btnNext.disabled = !stepValido(state.step);
+  btnNext.textContent = (ETIQUETA_SIGUIENTE_PASO[state.step] || 'Continuar') + ' →';
 
   const peek = document.getElementById('pricePeek');
   if (files.size > 0) {
