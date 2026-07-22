@@ -15,7 +15,7 @@ export async function onRequestGet({ request, env }) {
 
     // Sin filtro: catálogo completo habilitado (uso administrativo).
     const { results } = await env.DB
-      .prepare('SELECT id, descripcion, unidad_medida, precio, jerarquia, codigo, categoria_id FROM productos WHERE habilitado = 1 ORDER BY jerarquia, id')
+      .prepare('SELECT id, descripcion, unidad_medida, precio, jerarquia, codigo, categoria_id, paginas_minimas FROM productos WHERE habilitado = 1 ORDER BY jerarquia, id')
       .all();
     return Response.json(results);
   } catch (err) {
