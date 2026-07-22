@@ -54,7 +54,7 @@ function renderHeader(selector, config) {
 
   cont.innerHTML = `
     <div class="site-header">
-      <a class="site-header-logo" href="99copias.com.ar"><img src="logo.svg" alt="Imprenta" class="brand-logo"></a>
+      <a class="site-header-logo" href="https://99copias.com.ar"><img src="logo.svg" alt="Imprenta" class="brand-logo"></a>
       <nav class="site-header-nav">
         <ul class="site-header-links"></ul>
         ${mostrarCta ? `<a class="btn btn-primary site-header-cta"></a>` : ''}
