@@ -144,6 +144,17 @@ export async function onRequestPost({ request, env }) {
       .bind(JSON.stringify({ archivos: archivosConfirmados, items }), trabajoId)
       .run();
 
+    ctx.waitUntil(
+  fetch('https://99copias-panel.pages.dev/api/push/notificar-pedido', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-webhook-secret': env.PANEL_WEBHOOK_SECRET,
+    },
+    body: JSON.stringify({ trabajo_id: trabajoId }),
+  }).catch(() => {})
+);
+
     return Response.json({ trabajo_id: trabajoId, total: totalConEnvio, subtotal_impresion: total, con_envio, costo_envio, items });
   } catch (err) {
     console.error(err);
