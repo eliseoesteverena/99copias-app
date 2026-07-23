@@ -152,7 +152,6 @@ export async function onRequestPost({ request, env }) {
   });
 } catch {
   }
-console.log(PANEL_WEBHOOK_SECRET)
     return Response.json({ trabajo_id: trabajoId, total: totalConEnvio, subtotal_impresion: total, con_envio, costo_envio, items });
   } catch (err) {
     console.error(err);
