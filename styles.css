@@ -278,6 +278,10 @@ input, select, textarea{ font-family:inherit; }
   padding: 1.5rem;
 }
 .plate + .plate{ margin-top: 1.15rem; }
+details.plate summary{ list-style:none; display:flex; align-items:center; justify-content:space-between; }
+details.plate summary::-webkit-details-marker{ display:none; }
+details.plate summary::after{ content:'+'; font-family:var(--font-mono); font-size:1rem; color:var(--ink-40); }
+details.plate[open] summary::after{ content:'–'; }
 
 .plate.is-focused{ box-shadow: 6px 6px 0 var(--ink); }
 .plate.is-focused::before{
@@ -403,13 +407,13 @@ input, select, textarea{ font-family:inherit; }
 .checkline input{ width:1.1rem; height:1.1rem; accent-color:var(--ink); }
 
 .segmented{
-  display:inline-flex; border: var(--line); border-radius: var(--r-md);
+  display:flex; width:100%; border: var(--line); border-radius: var(--r-md);
   overflow:hidden; max-width:100%; background:var(--card);
 }
 .segmented button{
   border:none; background:transparent; color:var(--ink);
   padding:.5rem .9rem; font-size:.78rem; font-weight:600; cursor:pointer;
-  flex:0 0 auto;
+  flex:1 1 0; min-width:0; text-align:center;
 }
 .segmented button.is-on{ background:var(--ink); color:#fff; }
 .segmented button:disabled{ opacity:.3; cursor:not-allowed; text-decoration:line-through; }

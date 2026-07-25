@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pedido de impresión</title>
-
-
-
 <link rel="stylesheet" href="styles.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -70,9 +67,9 @@
     </div>
 
     <div id="loadedWrap" style="display:none;">
-      <div class="plate" style="margin-bottom:1rem;">
-        <div class="eyebrow" style="margin-bottom:.6rem;">Configuración global</div>
-        <div class="form-grid">
+      <details class="plate" id="detailsAjustesGlobales" style="margin-bottom:1rem;">
+        <summary class="eyebrow" style="cursor:pointer;">Ajustes para todos los archivos</summary>
+        <div class="form-grid" style="margin-top:1rem;">
           <div class="field">
             <label>Copias por archivo</label>
             <input class="input" type="number" min="1" value="1" id="gCopias">
@@ -84,7 +81,6 @@
           <div class="field">
             <label>Acabado</label>
             <div class="segmented accent" id="gAcabado">
-              <button type="button" class="is-on" data-value="suelto">Suelto</button>
               <button type="button" data-value="abrochado">Abrochado</button>
               <button type="button" data-value="anillado">Anillado</button>
               <button type="button" data-value="clip">Clip</button>
@@ -111,7 +107,7 @@
             <button type="button" class="btn btn-outline btn-sm" id="btnApplyAll">Aplicar a todos los archivos</button>
           </div>
         </div>
-      </div>
+      </details>
 
       <label class="dropzone" id="dropzoneMore" style="padding:1.25rem; margin-bottom:1rem;">
         <input type="file" id="fileInputMore" multiple accept="application/pdf,image/*">
@@ -127,17 +123,16 @@
     <div class="panel-head">
       <h2>Elegí día y horario de entrega</h2>
       <p class="sub" id="turnoZonaLabel">Turnos disponibles para tu zona.</p>
+      <p class="sub">Elegí una fecha para ver los turnos.</p>
     </div>
     <div class="date-picker" id="datePicker"></div>
-    <div class="slot-grid" id="slotGrid">
-      <div class="empty">Elegí una fecha para ver los turnos.</div>
-    </div>
+    <div class="slot-grid" id="slotGrid"></div>
   </section>
 
   <!-- ================= PASO 4 · DATOS DEL CLIENTE ================= -->
   <section class="panel" id="panel-4">
     <div class="panel-head">
-      <h2>Tus datos</h2>
+      <h2>Datos personales</h2>
       <p class="sub">Los necesitamos para emitir el comprobante y coordinar la entrega.</p>
     </div>
     <div class="plate">
@@ -177,21 +172,28 @@
       </div>
     </div>
 
-    <div class="alert alert-info" style="margin-top:1.25rem;" id="payHint">
-      Al confirmar, el precio se recalcula en el servidor y se genera el checkout de Mercado Pago.
-    </div>
     <div class="alert alert-error" id="payError" style="display:none;"></div>
 
     <button type="button" class="btn btn-primary btn-block" id="btnPagar" style="margin-top:1rem; padding:.9rem;">
       Ir a pagar con Mercado Pago →
     </button>
 
+    <div class="eyebrow" style="text-align:center; margin-top:.75rem; display:flex; align-items:center; justify-content:center; gap:.4rem;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="5" y="11" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      Pago seguro
+    </div>
+
     <div id="payLaunch" style="display:none; margin-top:1.25rem;">
       <div class="plate is-focused" style="text-align:center;">
         <div class="eyebrow" style="margin-bottom:.9rem;">Checkout listo</div>
-        <p style="font-weight:600; margin-bottom:1rem;">Escaneá el código desde tu celular para pagar sin salir de esta pantalla</p>
-        <img id="payQr" src="" alt="Código QR para pagar con Mercado Pago" width="220" height="220" style="display:block; margin:0 auto;">
-        <p class="eyebrow" style="margin-top:1rem;">— o bien —</p>
+        <div id="payQrBlock">
+          <p style="font-weight:600; margin-bottom:1rem;">Escaneá el código desde tu celular para pagar sin salir de esta pantalla</p>
+          <img id="payQr" src="" alt="Código QR para pagar con Mercado Pago" width="220" height="220" style="display:block; margin:0 auto;">
+          <p class="eyebrow" style="margin-top:1rem;">— o bien —</p>
+        </div>
         <a id="payLink" class="btn btn-outline" href="#" style="margin-top:.5rem;">Continuar el pago en esta pestaña →</a>
         <p class="eyebrow" style="margin-top:1.25rem;">Esta pantalla se actualiza sola apenas se acredite el pago — no hace falta que vuelvas ni recargues.</p>
       </div>
@@ -221,7 +223,6 @@
   <span class="price-peek" id="pricePeek"></span>
   <button type="button" class="btn btn-primary" id="btnNext">Continuar →</button>
 </div>
-
 
 <script src="header-footer.js"></script>
 <script>

@@ -16,6 +16,7 @@ const state = {
   // Todos los archivos de este pedido suben bajo la misma carpeta de staging en R2
   // (staging/{sesionSubida}/...) — se confirman o se limpian juntos.
   sesionSubida: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
+  diasConTurno: null, // array de dia_semana (0-6) con turnos activos en la zona elegida, o null = sin filtrar
 };
 
 let fileIdCounter = 0;
@@ -194,15 +195,39 @@ function selectZona(z) {
   updateNavState();
 }
 
+function truncarNombre(nombre, max) {
+  if (nombre.length <= max) return nombre;
+  return nombre.slice(0, max - 1) + '…';
+}
+
+function formatearFechaDDMMAAAA(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
+}
+
 /* ---------- Turnos ---------- */
+async function cargarDiasConTurno() {
+  try {
+    state.diasConTurno = await apiGet('/api/turnos/dias?zona_id=' + state.zona.id);
+  } catch (err) {
+    console.error('No se pudieron cargar los días con turnos, se muestran todos:', err);
+    state.diasConTurno = null; // null = no pudimos filtrar, mostramos los 14 días igual
+  }
+}
+
 function buildDatePicker() {
   const wrap = document.getElementById('datePicker');
+  const diasConTurno = state.diasConTurno;
+
   wrap.innerHTML = '';
   const dows = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
   const hoy = new Date();
+  let algunDiaMostrado = false;
   for (let i = 0; i < 14; i++) {
     const d = new Date(hoy);
     d.setDate(hoy.getDate() + i);
+    if (diasConTurno && !diasConTurno.includes(d.getDay())) continue; // sin turnos ese día de la semana
+    algunDiaMostrado = true;
     const iso = d.toISOString().slice(0, 10);
     const chip = document.createElement('button');
     chip.type = 'button';
@@ -210,6 +235,9 @@ function buildDatePicker() {
     chip.innerHTML = `<span class="dow">${dows[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>`;
     chip.addEventListener('click', () => selectFecha(iso));
     wrap.appendChild(chip);
+  }
+  if (!algunDiaMostrado) {
+    wrap.innerHTML = '<div class="empty">No hay turnos configurados para esta zona en los próximos días.</div>';
   }
 }
 
@@ -238,7 +266,7 @@ async function selectFecha(iso) {
       card.className = 'slot-card' + (full ? ' is-full' : '');
       card.disabled = full;
       card.innerHTML = `
-        <span class="day mono">${iso}</span>
+        <span class="day mono">${formatearFechaDDMMAAAA(iso)}</span>
         <div class="range">${t.hora_inicio} – ${t.hora_fin}</div>
         <div class="cap">${full ? 'NO DISPONIBLE' : (t.capacidad_maxima ? (t.capacidad_maxima - t.ocupados) + ' cupos' : 'cupo abierto')}</div>`;
       if (!full) card.addEventListener('click', () => selectTurno(t, card));
@@ -263,10 +291,11 @@ function selectTurno(t, cardEl) {
    ========================================================= */
 function readGlobalSettings() {
   const primarioBtn = document.querySelector('#gPrimario button.is-on');
+  const acabadoBtn = document.querySelector('#gAcabado button.is-on');
   return {
     copias: parseInt(document.getElementById('gCopias').value, 10) || 1,
     faz: document.querySelector('#gFaz button.is-on').dataset.value,
-    acabado: document.querySelector('#gAcabado button.is-on').dataset.value,
+    acabado: acabadoBtn ? acabadoBtn.dataset.value : 'suelto',
     primario: primarioBtn ? primarioBtn.dataset.value : (primariosDisponibles()[0] || {}).codigo,
     paginasPorCarilla: parseInt(document.querySelector('#gPaginasPorCarilla button.is-on').dataset.value, 10) || 1,
     rango: '',
@@ -437,7 +466,7 @@ function acabadoPermitido(entry, secundario) {
 }
 
 function renderAcabadoBotones(entry) {
-  return secundariosDisponibles().map(s => {
+  return secundariosDisponibles().filter(s => s.codigo !== 'suelto').map(s => {
     const permitido = acabadoPermitido(entry, s);
     const isOn = entry.settings.acabado === s.codigo;
     return `<button type="button" data-value="${s.codigo}"
@@ -545,9 +574,19 @@ function renderFileList() {
     group.addEventListener('click', e => {
       const btn = e.target.closest('button');
       if (!btn || btn.disabled) return;
+      const campo = group.dataset.field;
+
+      // Solo "acabado" tiene un estado "sin elegir" implícito (Suelto) — clickear
+      // de nuevo el botón ya activo lo deselecciona y vuelve a ese default.
+      if (campo === 'acabado' && btn.classList.contains('is-on')) {
+        btn.classList.remove('is-on');
+        files.get(group.dataset.id).settings.acabado = 'suelto';
+        updateDim(group.dataset.id);
+        return;
+      }
+
       group.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
       btn.classList.add('is-on');
-      const campo = group.dataset.field;
       const valor = campo === 'paginasPorCarilla' ? parseInt(btn.dataset.value, 10) : btn.dataset.value;
       files.get(group.dataset.id).settings[campo] = valor;
       updateDim(group.dataset.id);
@@ -626,6 +665,10 @@ document.querySelectorAll('#gAcabado, #gFaz, #gPrimario, #gPaginasPorCarilla').f
   group.addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn) return;
+    if (group.id === 'gAcabado' && btn.classList.contains('is-on')) {
+      btn.classList.remove('is-on');
+      return;
+    }
     group.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
     btn.classList.add('is-on');
   });
@@ -687,6 +730,7 @@ function prefillCliente() {
   document.getElementById('cDocNumero').value = c.documento_numero || '';
   document.getElementById('cEmail').value = c.email || '';
   document.getElementById('cCelular').value = c.celular || '';
+  updateNavState(); // el prefill no dispara "input" — hay que revalidar el botón a mano
 }
 
 // El botón "Continuar" depende de que el formulario esté completo — hay que
@@ -705,9 +749,24 @@ function readClienteForm() {
   };
 }
 
+const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function clienteFormValido() {
   const c = readClienteForm();
-  return !!(c.nombre && c.apellido && c.documento_numero);
+  if (!c.nombre || !c.apellido) return false;
+
+  const soloDigitos = c.documento_numero.replace(/\D/g, '');
+  const docValido = c.documento_tipo === 'cuit'
+    ? soloDigitos.length === 11
+    : soloDigitos.length >= 7 && soloDigitos.length <= 8;
+  if (!docValido) return false;
+
+  if (!REGEX_EMAIL.test(c.email)) return false;
+
+  const celularDigitos = c.celular.replace(/\D/g, '');
+  if (celularDigitos.length < 8) return false;
+
+  return true;
 }
 
 // "Retiro en local" no necesita dirección — queda un valor fijo y legible
@@ -731,7 +790,7 @@ async function renderResumenFinal() {
     row.className = 'receipt-row';
     row.innerHTML = `
       <div>
-        <div class="name">${entry.file.name}</div>
+        <div class="name" title="${entry.file.name}">${truncarNombre(entry.file.name, 20)}</div>
         <div class="spec">${labelProductoActual(entry)} · ${calc.carillas} carillas · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)}</div>
       </div>
       <div class="val">${money(calc.total)}</div>`;
@@ -799,8 +858,13 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
 
     // No redirigimos directo: en desktop es común no estar logueado en MP.
     // Mostramos QR (para pagar desde el celular) + link para seguir en la misma pestaña.
-    document.getElementById('payQr').src =
-      'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' + encodeURIComponent(init_point);
+    // En mobile el QR no tiene sentido (es el mismo dispositivo) — solo el link.
+    const esDesktop = window.innerWidth > 640;
+    document.getElementById('payQrBlock').style.display = esDesktop ? 'block' : 'none';
+    if (esDesktop) {
+      document.getElementById('payQr').src =
+        'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' + encodeURIComponent(init_point);
+    }
     document.getElementById('payLink').href = init_point;
     document.getElementById('payLaunch').style.display = 'block';
     btn.style.display = 'none';
@@ -843,15 +907,13 @@ function updateStepline() {
   });
 }
 
-const ETIQUETA_SIGUIENTE_PASO = { 1: 'Archivos', 2: 'Turno', 3: 'Datos', 4: 'Pago' };
-
 function updateNavState() {
   document.getElementById('btnBack').style.visibility = state.step === 1 ? 'hidden' : 'visible';
   const btnNext = document.getElementById('btnNext');
   const isLast = state.step === 5;
   btnNext.style.display = isLast ? 'none' : 'inline-flex';
   btnNext.disabled = !stepValido(state.step);
-  btnNext.textContent = (ETIQUETA_SIGUIENTE_PASO[state.step] || 'Continuar') + ' →';
+  btnNext.textContent = 'Continuar →';
 
   const peek = document.getElementById('pricePeek');
   if (files.size > 0) {
@@ -870,7 +932,8 @@ function goToStep(n) {
 
   if (n === 3) {
     document.getElementById('turnoZonaLabel').textContent = `Turnos disponibles para ${state.zona ? state.zona.nombre : 'tu zona'}.`;
-    buildDatePicker();
+    document.getElementById('datePicker').innerHTML = '<div class="empty">Cargando días disponibles…</div>';
+    cargarDiasConTurno().then(buildDatePicker);
   }
   if (n === 4) prefillCliente();
   if (n === 5) renderResumenFinal();
