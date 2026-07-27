@@ -16,6 +16,7 @@ const state = {
   // (staging/{sesionSubida}/...) — se confirman o se limpian juntos.
   sesionSubida: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
   diasConTurno: null, // array de dia_semana (0-6) con turnos activos en la zona elegida, o null = sin filtrar
+  activePhotoId: null, // id de la foto mostrada actualmente en el editor full-size del Paso 2
 };
 
 let fileIdCounter = 0;
@@ -278,7 +279,16 @@ function readGlobalSettings() {
 
 function estadoEdicionInicial() {
   return {
-    scale: 1, panX: 0, panY: 0,
+    scale: 1,
+    // panFracX/Y: desplazamiento como fracción del margen disponible
+    // (currW-frameW)/2, rango [-1,1], 0=centrado. Independiente de resolución
+    // a propósito: el mismo estado sirve para dibujar el preview a cualquier
+    // tamaño de pantalla Y para exportar en base al tamaño natural de la
+    // foto, sin que dependan una de la otra.
+    panFracX: 0, panFracY: 0,
+    rotated: false,   // gira el MARCO de recorte 90° (no la imagen) — ej. papel
+                       // vertical con una foto horizontal adentro, o viceversa
+    flipH: false,      // espejo horizontal de la imagen
     brightness: 1, contrast: 1, saturate: 1,
     byn: false,
   };
@@ -293,6 +303,34 @@ function construirFiltroCss(st) {
   let filt = `brightness(${st.brightness}) contrast(${st.contrast}) saturate(${st.saturate})`;
   if (st.byn) filt += ` grayscale(100%) contrast(1.5) brightness(1.05)`;
   return filt;
+}
+
+// Relación de ancho/alto del marco de recorte para el tamaño elegido de una
+// foto, considerando el flag "rotated" (invierte ancho/alto del producto).
+function targetRatioDe(entry) {
+  const dims = String(entry.settings.tamano).match(/^(\d+)x(\d+)/i);
+  let ratio = dims ? (parseFloat(dims[1]) / parseFloat(dims[2])) : 1;
+  if (entry.editState.rotated) ratio = 1 / ratio;
+  return ratio;
+}
+
+// Dado un frame de ancho×alto (en cualquier unidad: px de pantalla o px
+// naturales — la fórmula es la misma) y el estado de edición, devuelve el
+// tamaño base de la imagen (la escala mínima que cubre el frame, "cover")
+// más los límites de paneo en esa misma unidad.
+function geometriaEncuadre(entry, frameW, frameH, natW, natH) {
+  let baseW, baseH;
+  if ((natW / natH) > (frameW / frameH)) { baseH = frameH; baseW = frameH * (natW / natH); }
+  else { baseW = frameW; baseH = frameW / (natW / natH); }
+
+  const st = entry.editState;
+  const currW = baseW * st.scale, currH = baseH * st.scale;
+  const maxPanX = Math.max(0, (currW - frameW) / 2);
+  const maxPanY = Math.max(0, (currH - frameH) / 2);
+  const panX = st.panFracX * maxPanX;
+  const panY = st.panFracY * maxPanY;
+
+  return { baseW, baseH, currW, currH, maxPanX, maxPanY, panX, panY };
 }
 
 function addFiles(fileListObj) {
@@ -321,8 +359,13 @@ function addFiles(fileListObj) {
   accepted.forEach(f => {
     const id = 'f' + (++fileIdCounter);
     const thumbUrl = URL.createObjectURL(f);
+    // Imagen cargada en memoria, independiente del <img> visible en el stage
+    // (que solo existe para la foto activa) — permite exportar cualquier
+    // foto (incluida una que no se esté viendo) al confirmar el Paso 2.
+    const imgOffscreen = new Image();
+    imgOffscreen.src = thumbUrl;
     files.set(id, {
-      file: f, thumbUrl, naturalW: 0, naturalH: 0,
+      file: f, thumbUrl, imgOffscreen, naturalW: 0, naturalH: 0,
       settings: { copias: g.copias, tamano: g.tamano },
       editState: { ...estadoEdicionInicial(), byn: g.byn },
       // La subida a R2 ya no ocurre por edición — se sube una única vez cuando
@@ -335,44 +378,57 @@ function addFiles(fileListObj) {
   if (accepted.length) {
     document.getElementById('dzWrap').style.display = 'none';
     document.getElementById('loadedWrap').style.display = 'block';
-    renderFileList();
+    document.body.classList.add('is-photo-editor');
+    if (!state.activePhotoId || !files.has(state.activePhotoId)) {
+      state.activePhotoId = newIds[0];
+    }
+    renderEditor();
   }
   updateNavState();
 }
 
-// Exporta el recorte + ajustes actuales de una tarjeta a un Blob JPEG, usando su
-// <canvas> de trabajo. Devuelve null si la imagen todavía no cargó.
+// Exporta el recorte + ajustes actuales de una foto a un Blob JPEG. Usa el
+// tamaño ORIGINAL de la imagen como referencia del encuadre (no el tamaño en
+// pantalla) — así el resultado es siempre a la máxima resolución disponible
+// de la foto, sea o no la que se está mostrando en el editor en ese momento.
 function exportarFotoBlob(id) {
   return new Promise(resolve => {
     const entry = files.get(id);
-    const card = document.getElementById('card-' + id);
-    if (!entry || !card) return resolve(null);
-    const imgEl = card.querySelector('.crop-source-img');
-    const cropContainer = card.querySelector('.crop-container');
-    if (!imgEl || !imgEl.naturalWidth || !cropContainer) return resolve(null);
+    const img = entry && entry.imgOffscreen;
+    if (!entry || !img || !img.naturalWidth) return resolve(null);
 
+    const natW = img.naturalWidth, natH = img.naturalHeight;
+
+    // El "frame" de referencia es el propio tamaño natural de la imagen,
+    // recortado a la relación de aspecto del producto elegido (respetando
+    // rotated). Como frameW×frameH y natW×natH comparten la misma escala de
+    // base (ambos definidos en píxeles naturales), geometriaEncuadre() cubre
+    // exactamente ese frame sin ningún factor de conversión con pantalla.
+    const targetRatio = targetRatioDe(entry);
+    let frameW, frameH;
+    if (targetRatio > (natW / natH)) { frameW = natW; frameH = natW / targetRatio; }
+    else { frameH = natH; frameW = natH * targetRatio; }
+
+    const { baseW, baseH, panX, panY } = geometriaEncuadre(entry, frameW, frameH, natW, natH);
     const st = entry.editState;
-    const natW = imgEl.naturalWidth, natH = imgEl.naturalHeight;
-    const fW = cropContainer.clientWidth, fH = cropContainer.clientHeight;
-    if (!fW || !fH) return resolve(null);
+    const scX = natW / (baseW * st.scale);
+    const scY = natH / (baseH * st.scale);
 
-    let bW = fW, bH = fW / (natW / natH);
-    if ((natW / natH) > (fW / fH)) { bH = fH; bW = fH * (natW / natH); }
-
-    const cW = bW * st.scale, cH = bH * st.scale;
-    const scX = natW / cW, scY = natH / cH;
-    const srcX = (cW / 2 - fW / 2 - st.panX) * scX;
-    const srcY = (cH / 2 - fH / 2 - st.panY) * scY;
-    const srcW = fW * scX, srcH = fH * scY;
+    const srcX = (baseW * st.scale / 2 - frameW / 2 - panX) * scX;
+    const srcY = (baseH * st.scale / 2 - frameH / 2 - panY) * scY;
+    const srcW = frameW * scX, srcH = frameH * scY;
 
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(srcW));
     canvas.height = Math.max(1, Math.round(srcH));
     const ctx = canvas.getContext('2d');
+    ctx.filter = construirFiltroCss(st);
 
-    let cssFilt = construirFiltroCss(st);
-    ctx.filter = cssFilt;
-    ctx.drawImage(imgEl, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
+    if (st.flipH) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
 
     canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
   });
@@ -538,10 +594,7 @@ async function subirTodasLasFotos() {
 document.getElementById('btnOverlayRevisar').addEventListener('click', () => {
   cerrarOverlay();
   const [idConError] = [...files.entries()].find(([, e]) => e.errorSubida) || [];
-  if (idConError) {
-    const card = document.getElementById('card-' + idConError);
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  if (idConError) irAFoto(idConError);
 });
 document.getElementById('btnOverlayReintentar').addEventListener('click', async () => {
   const conError = [...files.entries()].filter(([, e]) => e.errorSubida).map(([id]) => id);
@@ -567,254 +620,361 @@ document.getElementById('btnOverlayReintentar').addEventListener('click', async 
   }
 });
 
+// Refleja el estado de subida de una foto tanto en su miniatura del
+// filmstrip (badge) como, si es la foto que se está mostrando en ese
+// momento, en el aviso de error debajo del editor.
 function actualizarEstadoSubida(id) {
-  const el = document.getElementById('upload-' + id);
-  if (!el) return;
   const entry = files.get(id);
   if (!entry) return;
-  el.innerHTML = estadoSubidaHtml(id, entry);
-  const retryBtn = el.querySelector('[data-retry]');
-  if (retryBtn) retryBtn.addEventListener('click', () => subirFotoEditada(retryBtn.dataset.retry));
-}
 
-function estadoSubidaHtml(id, entry) {
-  if (entry.subiendo) return `<span class="upload-status is-uploading">⟳ Subiendo…</span>`;
-  if (entry.errorSubida) return `<span class="upload-status is-error">⚠ ${entry.errorSubida} <button type="button" class="btn btn-sm btn-outline" data-retry="${id}">Reintentar</button></span>`;
-  if (entry.r2Key) return `<span class="upload-status is-ok">✓ Lista</span>`;
-  return `<span class="upload-status is-pending">Pendiente</span>`;
-}
-
-function renderFileList() {
-  const list = document.getElementById('fileList');
-  list.innerHTML = '';
-  let i = 0;
-  files.forEach((entry, id) => {
-    i++;
-    const calc = calcularFoto(entry);
-    const card = document.createElement('article');
-    card.className = 'photo-card';
-    card.id = 'card-' + id;
-    card.innerHTML = `
-      <div class="photo-card-head">
-        <div class="fname-wrap">
-          <div class="idx">FOTO ${i}/${files.size}</div>
-          <div class="fname" title="${entry.file.name}">${entry.file.name}</div>
-        </div>
-        <div id="upload-${id}">${estadoSubidaHtml(id, entry)}</div>
-      </div>
-
-      <div class="photo-preview">
-        <div class="crop-container">
-          <div class="image-movable"><img class="crop-source-img" src="${entry.thumbUrl}"></div>
-          <div class="crop-frame"></div>
-        </div>
-      </div>
-
-      <div class="photo-edit-controls">
-        <button type="button" class="btn-icon" data-action="zoom-out" title="Alejar">−</button>
-        <input type="range" class="zoom-slider" min="1" max="3" step="0.01" value="${entry.editState.scale}" data-id="${id}">
-        <button type="button" class="btn-icon" data-action="zoom-in" title="Acercar">+</button>
-        <span class="zoom-label">Arrastrá la foto para moverla</span>
-      </div>
-
-      <div class="byn-toggle">
-        <label>Blanco y negro</label>
-        <div class="segmented local-byn" data-id="${id}">
-          <button type="button" data-value="0" class="${entry.editState.byn ? '' : 'is-on'}">Color</button>
-          <button type="button" data-value="1" class="${entry.editState.byn ? 'is-on' : ''}">B&amp;N</button>
-        </div>
-      </div>
-
-      <details class="photo-color-panel">
-        <summary>Ajustes opcionales</summary>
-        <div class="photo-color-panel-content">
-          <div class="color-row"><label>Brillo</label><input type="range" data-key="brightness" data-id="${id}" min="0.6" max="1.4" step="0.02" value="${entry.editState.brightness}"></div>
-          <div class="color-row"><label>Contraste</label><input type="range" data-key="contrast" data-id="${id}" min="0.6" max="1.4" step="0.02" value="${entry.editState.contrast}"></div>
-          <div class="color-row"><label>Saturación</label><input type="range" data-key="saturate" data-id="${id}" min="0" max="2" step="0.1" value="${entry.editState.saturate}" ${entry.editState.byn ? 'disabled' : ''}></div>
-        </div>
-      </details>
-
-      <div class="photo-card-foot">
-        <div class="field">
-          <label>Tamaño</label>
-          <select class="select local-tamano" data-id="${id}">
-            ${state.productos.map(p => `<option value="${p.codigo}" ${entry.settings.tamano === p.codigo ? 'selected' : ''}>${labelTamano(p)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field">
-          <label>Copias</label>
-          <input class="input" type="number" min="1" value="${entry.settings.copias}" data-id="${id}" data-field="copias">
-        </div>
-        <button type="button" class="photo-remove" data-remove="${id}" aria-label="Quitar">✕</button>
-      </div>
-
-      <div class="dim-line" id="dim-${id}">
-        <span>${labelTamano(productoPorCodigo(entry.settings.tamano) || { codigo: entry.settings.tamano, descripcion: '' })} × ${calc.copias} ${calc.copias === 1 ? 'copia' : 'copias'}</span>
-        <span class="result"><span class="amt">${money(calc.total)}</span></span>
-      </div>
-    `;
-    list.appendChild(card);
-    initPhotoCard(id, card, entry);
-  });
-
-  updateNavState();
-}
-
-// Inicializa el encuadre interactivo (crop/zoom/pan) y los listeners de una tarjeta
-// recién insertada en el DOM. Separado de renderFileList para no reconstruir el
-// estado de recorte cada vez que se re-renderiza la lista completa.
-function initPhotoCard(id, card, entry) {
-  const previewArea = card.querySelector('.photo-preview');
-  const cropContainer = card.querySelector('.crop-container');
-  const imageMovable = card.querySelector('.image-movable');
-  const imgEl = card.querySelector('.crop-source-img');
-  const slider = card.querySelector('.zoom-slider');
-  const tamanoSelect = card.querySelector('.local-tamano');
-
-  const updateView = () => {
-    const availW = previewArea.clientWidth - 16;
-    const availH = previewArea.clientHeight - 16;
-    if (availW <= 0) return;
-
-    const producto = productoPorCodigo(entry.settings.tamano);
-    const dims = (producto ? producto.codigo : entry.settings.tamano).match(/^(\d+)x(\d+)/i);
-    const targetRatio = dims ? (parseFloat(dims[1]) / parseFloat(dims[2])) : 1;
-
-    let frameW, frameH;
-    if (targetRatio > (availW / availH)) { frameW = availW; frameH = availW / targetRatio; }
-    else { frameH = availH; frameW = availH * targetRatio; }
-
-    cropContainer.style.width = `${frameW}px`;
-    cropContainer.style.height = `${frameH}px`;
-
-    const natW = imgEl.naturalWidth, natH = imgEl.naturalHeight;
-    if (!natW) return;
-
-    let baseW, baseH;
-    if ((natW / natH) > (frameW / frameH)) { baseH = frameH; baseW = frameH * (natW / natH); }
-    else { baseW = frameW; baseH = frameW / (natW / natH); }
-
-    const st = entry.editState;
-    const currW = baseW * st.scale, currH = baseH * st.scale;
-    const maxPanX = Math.max(0, (currW - frameW) / 2);
-    const maxPanY = Math.max(0, (currH - frameH) / 2);
-    st.panX = Math.max(-maxPanX, Math.min(maxPanX, st.panX));
-    st.panY = Math.max(-maxPanY, Math.min(maxPanY, st.panY));
-
-    imageMovable.style.width = `${baseW}px`;
-    imageMovable.style.height = `${baseH}px`;
-    imageMovable.style.transform = `translate(calc(-50% + ${st.panX}px), calc(-50% + ${st.panY}px)) scale(${st.scale})`;
-
-    applyFilters();
-  };
-
-  const applyFilters = () => {
-    imgEl.style.filter = construirFiltroCss(entry.editState);
-  };
-
-  imgEl.onload = () => {
-    entry.naturalW = imgEl.naturalWidth;
-    entry.naturalH = imgEl.naturalHeight;
-    updateView();
-  };
-  if (imgEl.complete && imgEl.naturalWidth) imgEl.onload();
-
-  new ResizeObserver(updateView).observe(previewArea);
-
-  // Cambiar tamaño: resetea encuadre (relación de aspecto distinta) y re-sube.
-  tamanoSelect.addEventListener('change', () => {
-    entry.settings.tamano = tamanoSelect.value;
-    entry.editState.scale = 1; entry.editState.panX = 0; entry.editState.panY = 0;
-    slider.value = 1;
-    updateView();
-    updateDim(id);
-    marcarPendienteDeSubir(id);
-  });
-
-  slider.addEventListener('input', e => {
-    entry.editState.scale = parseFloat(e.target.value);
-    updateView();
-    marcarPendienteDeSubir(id);
-  });
-  card.querySelector('[data-action="zoom-in"]').addEventListener('click', () => {
-    slider.value = Math.min(3, parseFloat(slider.value) + 0.1);
-    entry.editState.scale = parseFloat(slider.value);
-    updateView();
-    marcarPendienteDeSubir(id);
-  });
-  card.querySelector('[data-action="zoom-out"]').addEventListener('click', () => {
-    slider.value = Math.max(1, parseFloat(slider.value) - 0.1);
-    entry.editState.scale = parseFloat(slider.value);
-    updateView();
-    marcarPendienteDeSubir(id);
-  });
-
-  // Arrastre del encuadre (mouse + touch)
-  let isDown = false, sX, sY, iX, iY;
-  cropContainer.addEventListener('mousedown', e => { isDown = true; sX = e.clientX; sY = e.clientY; iX = entry.editState.panX; iY = entry.editState.panY; });
-  window.addEventListener('mousemove', e => { if (isDown) { entry.editState.panX = iX + (e.clientX - sX); entry.editState.panY = iY + (e.clientY - sY); updateView(); } });
-  window.addEventListener('mouseup', () => { if (isDown) { isDown = false; marcarPendienteDeSubir(id); } });
-
-  cropContainer.addEventListener('touchstart', e => { if (e.touches.length === 1) { isDown = true; sX = e.touches[0].clientX; sY = e.touches[0].clientY; iX = entry.editState.panX; iY = entry.editState.panY; } }, { passive: false });
-  window.addEventListener('touchmove', e => { if (isDown && e.touches.length === 1) { e.preventDefault(); entry.editState.panX = iX + (e.touches[0].clientX - sX); entry.editState.panY = iY + (e.touches[0].clientY - sY); updateView(); } }, { passive: false });
-  window.addEventListener('touchend', () => { if (isDown) { isDown = false; marcarPendienteDeSubir(id); } });
-
-  // Toggle Blanco y negro
-  const bynGroup = card.querySelector('.local-byn');
-  bynGroup.addEventListener('click', e => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const val = btn.dataset.value === '1';
-    entry.editState.byn = val;
-    bynGroup.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
-    btn.classList.add('is-on');
-    const satInput = card.querySelector('[data-key="saturate"]');
-    if (satInput) satInput.disabled = val;
-    applyFilters();
-    marcarPendienteDeSubir(id);
-  });
-
-  // Sliders de ajustes opcionales (brillo/contraste/saturación)
-  card.querySelectorAll('[data-key]').forEach(input => {
-    input.addEventListener('input', () => {
-      entry.editState[input.dataset.key] = parseFloat(input.value);
-      applyFilters();
-      marcarPendienteDeSubir(id);
-    });
-  });
-
-  // Copias
-  card.querySelector('[data-field="copias"]').addEventListener('input', e => {
-    entry.settings.copias = parseInt(e.target.value, 10) || 1;
-    updateDim(id);
-  });
-
-  // Quitar foto
-  card.querySelector('[data-remove]').addEventListener('click', () => {
-    if (entry.thumbUrl) URL.revokeObjectURL(entry.thumbUrl);
-    if (entry.r2Key) fetch('/api/archivos?key=' + encodeURIComponent(entry.r2Key), { method: 'DELETE' }).catch(() => {});
-    files.delete(id);
-    if (files.size === 0) {
-      document.getElementById('dzWrap').style.display = 'block';
-      document.getElementById('loadedWrap').style.display = 'none';
-    } else {
-      renderFileList();
+  if (peEls.filmstrip) {
+    const ids = ordenFotos();
+    const idx = ids.indexOf(id);
+    const thumb = peEls.filmstrip.querySelectorAll('.pe-thumb')[idx];
+    if (thumb) {
+      const statusEl = thumb.querySelector('.pe-thumb-status');
+      if (statusEl) statusEl.remove();
+      let html = '';
+      if (entry.subiendo) html = '<span class="pe-thumb-status is-pending">⟳</span>';
+      else if (entry.errorSubida) html = '<span class="pe-thumb-status is-error">!</span>';
+      if (html) thumb.insertAdjacentHTML('beforeend', html);
     }
-    updateNavState();
-  });
+  }
+
+  const alertEl = document.getElementById('rejectedAlertEditor');
+  if (alertEl && id === state.activePhotoId) {
+    if (entry.errorSubida) {
+      alertEl.textContent = entry.errorSubida;
+      alertEl.style.display = 'flex';
+    } else {
+      alertEl.style.display = 'none';
+    }
+  }
 }
 
-function updateDim(id) {
-  const entry = files.get(id);
+
+
+/* =========================================================
+   EDITOR FULL-SIZE — una foto a la vez, tipo editor de WhatsApp.
+   renderEditor() dibuja/actualiza todo el bloque (barra de iconos, foto
+   grande, zoom, specs, filmstrip) en función de state.activePhotoId.
+   ========================================================= */
+
+// Refs de nodos que no cambian (se resuelven una sola vez).
+const peEls = {
+  toolbar: null, img: null, container: null, movable: null,
+  arrowPrev: null, arrowNext: null, zoom: null,
+  tamano: null, copias: null, price: null, filmstrip: null,
+  adjustPanel: null, brightness: null, contrast: null, saturate: null,
+  bynBtn: null, removeBtn: null, stage: null,
+};
+function resolvePeEls() {
+  peEls.toolbar = document.getElementById('peToolbar');
+  peEls.img = document.getElementById('peImg');
+  peEls.container = document.getElementById('peCropContainer');
+  peEls.movable = document.getElementById('peImageMovable');
+  peEls.arrowPrev = document.getElementById('peArrowPrev');
+  peEls.arrowNext = document.getElementById('peArrowNext');
+  peEls.zoom = document.getElementById('peZoom');
+  peEls.tamano = document.getElementById('peTamano');
+  peEls.copias = document.getElementById('peCopias');
+  peEls.price = document.getElementById('pePrice');
+  peEls.filmstrip = document.getElementById('peFilmstrip');
+  peEls.adjustPanel = document.getElementById('peAdjustPanel');
+  peEls.brightness = document.getElementById('peBrightness');
+  peEls.contrast = document.getElementById('peContrast');
+  peEls.saturate = document.getElementById('peSaturate');
+  peEls.bynBtn = document.getElementById('peBynBtn');
+  peEls.removeBtn = document.getElementById('peRemoveBtn');
+  peEls.stage = document.getElementById('peStage');
+}
+
+function ordenFotos() {
+  return [...files.keys()];
+}
+
+function activeEntry() {
+  return files.get(state.activePhotoId);
+}
+
+// Recalcula el layout del stage (marco + imagen) para la foto activa y
+// vuelve a pintar el <img> visible. Se llama en resize, cambio de foto,
+// cambio de tamaño/rotación, zoom y arrastre.
+function actualizarStage() {
+  const entry = activeEntry();
+  if (!entry || !peEls.stage) return;
+
+  const availW = peEls.stage.clientWidth - 20;
+  const availH = peEls.stage.clientHeight - 20;
+  if (availW <= 0 || availH <= 0) return;
+
+  const targetRatio = targetRatioDe(entry);
+  let frameW, frameH;
+  if (targetRatio > (availW / availH)) { frameW = availW; frameH = availW / targetRatio; }
+  else { frameH = availH; frameW = availH * targetRatio; }
+
+  peEls.container.style.width = `${frameW}px`;
+  peEls.container.style.height = `${frameH}px`;
+
+  const natW = peEls.img.naturalWidth, natH = peEls.img.naturalHeight;
+  if (!natW) return;
+
+  const { baseW, baseH, maxPanX, maxPanY, panX, panY } = geometriaEncuadre(entry, frameW, frameH, natW, natH);
+
+  // Clampeamos la fracción guardada (por si cambió el tamaño/rotación y el
+  // pan anterior ya no entra en el nuevo margen disponible).
+  const st = entry.editState;
+  if (maxPanX === 0) st.panFracX = 0; else st.panFracX = Math.max(-1, Math.min(1, panX / maxPanX));
+  if (maxPanY === 0) st.panFracY = 0; else st.panFracY = Math.max(-1, Math.min(1, panY / maxPanY));
+
+  const flip = st.flipH ? -1 : 1;
+  peEls.movable.style.width = `${baseW}px`;
+  peEls.movable.style.height = `${baseH}px`;
+  peEls.movable.style.transform =
+    `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${st.scale * flip}, ${st.scale})`;
+
+  peEls.img.style.filter = construirFiltroCss(st);
+}
+
+function actualizarSpecsRow() {
+  const entry = activeEntry();
   if (!entry) return;
+  peEls.tamano.value = entry.settings.tamano;
+  peEls.copias.value = entry.settings.copias;
   const calc = calcularFoto(entry);
-  const el = document.getElementById('dim-' + id);
-  if (!el) return;
-  const p = productoPorCodigo(entry.settings.tamano);
-  el.querySelector('span:first-child').textContent = `${labelTamano(p || { codigo: entry.settings.tamano, descripcion: '' })} × ${calc.copias} ${calc.copias === 1 ? 'copia' : 'copias'}`;
-  el.querySelector('.result').innerHTML = `<span class="amt">${money(calc.total)}</span>`;
+  peEls.price.textContent = money(calc.total);
+  peEls.zoom.value = entry.editState.scale;
+  peEls.brightness.value = entry.editState.brightness;
+  peEls.contrast.value = entry.editState.contrast;
+  peEls.saturate.value = entry.editState.saturate;
+  peEls.saturate.disabled = entry.editState.byn;
+  peEls.bynBtn.classList.toggle('is-on', entry.editState.byn);
+}
+
+function renderFilmstrip() {
+  const ids = ordenFotos();
+  peEls.filmstrip.innerHTML = '';
+  ids.forEach(id => {
+    const entry = files.get(id);
+    const thumb = document.createElement('button');
+    thumb.type = 'button';
+    thumb.className = 'pe-thumb' + (id === state.activePhotoId ? ' is-active' : '');
+    let statusHtml = '';
+    if (entry.subiendo) statusHtml = '<span class="pe-thumb-status is-pending">⟳</span>';
+    else if (entry.errorSubida) statusHtml = '<span class="pe-thumb-status is-error">!</span>';
+    thumb.innerHTML = `<img src="${entry.thumbUrl}" alt="">${statusHtml}`;
+    thumb.addEventListener('click', () => irAFoto(id));
+    peEls.filmstrip.appendChild(thumb);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'pe-thumb-add';
+  addBtn.title = 'Agregar más fotos';
+  addBtn.textContent = '+';
+  addBtn.addEventListener('click', () => document.getElementById('fileInputMore').click());
+  peEls.filmstrip.appendChild(addBtn);
+
+  const activeThumb = peEls.filmstrip.querySelector('.pe-thumb.is-active');
+  if (activeThumb) activeThumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+}
+
+function irAFoto(id) {
+  if (!files.has(id)) return;
+  state.activePhotoId = id;
+  renderEditor();
+}
+
+function irAFotoRelativa(delta) {
+  const ids = ordenFotos();
+  const idx = ids.indexOf(state.activePhotoId);
+  if (idx === -1) return;
+  const nextIdx = idx + delta;
+  if (nextIdx < 0 || nextIdx >= ids.length) return;
+  irAFoto(ids[nextIdx]);
+}
+
+// Punto de entrada: (re)dibuja todo el editor para la foto activa. Se llama
+// al agregar/quitar fotos, cambiar de foto, o tras cualquier edición.
+function renderEditor() {
+  if (!peEls.toolbar) resolvePeEls();
+  const entry = activeEntry();
+  if (!entry) return;
+
+  peEls.img.src = entry.thumbUrl;
+  const pintar = () => { actualizarStage(); };
+  if (peEls.img.complete && peEls.img.naturalWidth) pintar();
+  peEls.img.onload = pintar;
+
+  const ids = ordenFotos();
+  const idx = ids.indexOf(state.activePhotoId);
+  peEls.arrowPrev.disabled = idx <= 0;
+  peEls.arrowNext.disabled = idx >= ids.length - 1;
+
+  actualizarSpecsRow();
+  renderFilmstrip();
+  renderTamanoOptionsInto(peEls.tamano, entry.settings.tamano);
   updateNavState();
 }
+
+function renderTamanoOptionsInto(selectEl, selectedCodigo) {
+  selectEl.innerHTML = state.productos.map(p =>
+    `<option value="${p.codigo}" ${p.codigo === selectedCodigo ? 'selected' : ''}>${labelTamano(p)}</option>`
+  ).join('');
+}
+
+/* ---------- interacción: arrastre del encuadre (mouse + touch) ---------- */
+(function initStageDrag() {
+  let isDown = false, sX, sY, iFracX, iFracY, frameW, frameH, maxPanX, maxPanY;
+
+  function onDown(x, y) {
+    const entry = activeEntry();
+    if (!entry) return;
+    isDown = true; sX = x; sY = y;
+    iFracX = entry.editState.panFracX; iFracY = entry.editState.panFracY;
+    frameW = peEls.container.clientWidth; frameH = peEls.container.clientHeight;
+    const natW = peEls.img.naturalWidth, natH = peEls.img.naturalHeight;
+    const g = geometriaEncuadre(entry, frameW, frameH, natW, natH);
+    maxPanX = g.maxPanX; maxPanY = g.maxPanY;
+  }
+  function onMove(x, y) {
+    if (!isDown) return;
+    const entry = activeEntry();
+    if (!entry) return;
+    const dx = x - sX, dy = y - sY;
+    const flip = entry.editState.flipH ? -1 : 1;
+    entry.editState.panFracX = maxPanX ? Math.max(-1, Math.min(1, iFracX + (dx * flip) / maxPanX)) : 0;
+    entry.editState.panFracY = maxPanY ? Math.max(-1, Math.min(1, iFracY + dy / maxPanY)) : 0;
+    actualizarStage();
+  }
+  function onUp() {
+    if (!isDown) return;
+    isDown = false;
+    if (state.activePhotoId) marcarPendienteDeSubir(state.activePhotoId);
+  }
+
+  document.getElementById('peCropContainer').addEventListener('mousedown', e => onDown(e.clientX, e.clientY));
+  window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+  window.addEventListener('mouseup', onUp);
+
+  document.getElementById('peCropContainer').addEventListener('touchstart', e => {
+    if (e.touches.length === 1) onDown(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: false });
+  window.addEventListener('touchmove', e => {
+    if (isDown && e.touches.length === 1) { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); }
+  }, { passive: false });
+  window.addEventListener('touchend', onUp);
+
+  new ResizeObserver(() => actualizarStage()).observe(document.getElementById('peStage'));
+})();
+
+/* ---------- barra de iconos ---------- */
+document.getElementById('peToolbar').addEventListener('click', e => {
+  const btn = e.target.closest('.pe-icon-btn');
+  if (!btn) return;
+  const entry = activeEntry();
+  if (!entry) return;
+  const action = btn.dataset.action;
+
+  if (action === 'rotate') {
+    entry.editState.rotated = !entry.editState.rotated;
+    actualizarStage();
+    marcarPendienteDeSubir(state.activePhotoId);
+  } else if (action === 'flip-h') {
+    entry.editState.flipH = !entry.editState.flipH;
+    actualizarStage();
+    marcarPendienteDeSubir(state.activePhotoId);
+  } else if (action === 'byn') {
+    entry.editState.byn = !entry.editState.byn;
+    peEls.saturate.disabled = entry.editState.byn;
+    peEls.bynBtn.classList.toggle('is-on', entry.editState.byn);
+    actualizarStage();
+    marcarPendienteDeSubir(state.activePhotoId);
+  } else if (action === 'adjust') {
+    peEls.adjustPanel.classList.toggle('is-open');
+  }
+});
+
+document.getElementById('peRemoveBtn').addEventListener('click', () => {
+  const id = state.activePhotoId;
+  const entry = files.get(id);
+  if (!entry) return;
+  if (entry.thumbUrl) URL.revokeObjectURL(entry.thumbUrl);
+  if (entry.r2Key) fetch('/api/archivos?key=' + encodeURIComponent(entry.r2Key), { method: 'DELETE' }).catch(() => {});
+  files.delete(id);
+
+  if (files.size === 0) {
+    document.body.classList.remove('is-photo-editor');
+    document.getElementById('dzWrap').style.display = 'block';
+    document.getElementById('loadedWrap').style.display = 'none';
+    state.activePhotoId = null;
+  } else {
+    const ids = ordenFotos();
+    state.activePhotoId = ids[0];
+    renderEditor();
+  }
+  updateNavState();
+});
+
+/* ---------- zoom ---------- */
+document.getElementById('peZoom').addEventListener('input', e => {
+  const entry = activeEntry();
+  if (!entry) return;
+  entry.editState.scale = parseFloat(e.target.value);
+  actualizarStage();
+  marcarPendienteDeSubir(state.activePhotoId);
+});
+document.querySelector('.pe-zoom-row [data-action="zoom-in"]').addEventListener('click', () => {
+  const entry = activeEntry();
+  if (!entry) return;
+  entry.editState.scale = Math.min(3, entry.editState.scale + 0.1);
+  peEls.zoom.value = entry.editState.scale;
+  actualizarStage();
+  marcarPendienteDeSubir(state.activePhotoId);
+});
+document.querySelector('.pe-zoom-row [data-action="zoom-out"]').addEventListener('click', () => {
+  const entry = activeEntry();
+  if (!entry) return;
+  entry.editState.scale = Math.max(1, entry.editState.scale - 0.1);
+  peEls.zoom.value = entry.editState.scale;
+  actualizarStage();
+  marcarPendienteDeSubir(state.activePhotoId);
+});
+
+/* ---------- panel de ajustes finos ---------- */
+['peBrightness', 'peContrast', 'peSaturate'].forEach(elId => {
+  document.getElementById(elId).addEventListener('input', e => {
+    const entry = activeEntry();
+    if (!entry) return;
+    const key = elId === 'peBrightness' ? 'brightness' : elId === 'peContrast' ? 'contrast' : 'saturate';
+    entry.editState[key] = parseFloat(e.target.value);
+    peEls.img.style.filter = construirFiltroCss(entry.editState);
+    marcarPendienteDeSubir(state.activePhotoId);
+  });
+});
+
+/* ---------- tamaño / copias de la foto activa ---------- */
+document.getElementById('peTamano').addEventListener('change', e => {
+  const entry = activeEntry();
+  if (!entry) return;
+  entry.settings.tamano = e.target.value;
+  entry.editState.scale = 1; entry.editState.panFracX = 0; entry.editState.panFracY = 0;
+  actualizarStage();
+  actualizarSpecsRow();
+  renderFilmstrip();
+  marcarPendienteDeSubir(state.activePhotoId);
+});
+document.getElementById('peCopias').addEventListener('input', e => {
+  const entry = activeEntry();
+  if (!entry) return;
+  entry.settings.copias = Math.max(1, parseInt(e.target.value, 10) || 1);
+  actualizarSpecsRow();
+  updateNavState();
+});
+
+/* ---------- flechas de navegación entre fotos ---------- */
+document.getElementById('peArrowPrev').addEventListener('click', () => irAFotoRelativa(-1));
+document.getElementById('peArrowNext').addEventListener('click', () => irAFotoRelativa(1));
+
 
 document.getElementById('btnApplyAll').addEventListener('click', () => {
   const g = readGlobalSettings();
@@ -823,7 +983,7 @@ document.getElementById('btnApplyAll').addEventListener('click', () => {
     entry.settings.copias = g.copias;
     entry.editState.byn = g.byn;
   });
-  renderFileList();
+  renderEditor();
 });
 
 document.querySelectorAll('#gByn').forEach(group => {
@@ -1035,7 +1195,6 @@ function updateNavState() {
   const isLast = state.step === 5;
   btnNext.style.display = isLast ? 'none' : 'inline-flex';
   btnNext.disabled = !stepValido(state.step);
-  btnNext.textContent = 'Continuar →';
 
   const peek = document.getElementById('pricePeek');
   if (files.size > 0) {
@@ -1051,6 +1210,11 @@ function goToStep(n) {
   document.getElementById('panel-' + state.step).classList.add('is-active');
   updateStepline();
   updateNavState();
+
+  // El modo "editor full-size" (chrome compacto, sin stepline/título) sólo
+  // aplica mientras se está en el Paso 2 con fotos cargadas — en cualquier
+  // otro paso el wizard vuelve a verse con su nav completa normal.
+  document.body.classList.toggle('is-photo-editor', n === 2 && files.size > 0);
 
   if (n === 3) {
     document.getElementById('turnoZonaLabel').textContent = `Turnos disponibles para ${state.zona ? state.zona.nombre : 'tu zona'}.`;

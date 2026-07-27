@@ -1,53 +1,11 @@
 /* =========================================================
    EDITOR DE FOTOS — extiende el sistema visual de styles.css
+   Modo "full-size, una foto a la vez" (inspirado en el editor de
+   imágenes de WhatsApp): barra de iconos arriba, foto grande al centro,
+   carrusel de miniaturas abajo. Reemplaza el grid de tarjetas.
    ========================================================= */
 
-/* Grid de tarjetas: en mobile 1 columna (como antes), en desktop pasa a
-   grid para que el editor no se sienta "full width" — cada foto es una
-   tarjeta compacta, no una sección de página completa. */
-.photo-scroll{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap:1.1rem;
-}
-@media (min-width: 720px){
-  .photo-scroll{ grid-template-columns: repeat(2, 1fr); }
-}
-@media (min-width: 1180px){
-  .photo-scroll{ grid-template-columns: repeat(3, 1fr); }
-}
-
-.photo-card{
-  background:var(--card);
-  border: var(--line);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
-  overflow:hidden;
-  display:flex;
-  flex-direction:column;
-}
-
-.photo-card-head{
-  display:flex; align-items:center; justify-content:space-between;
-  gap:.75rem;
-  padding:.65rem .85rem;
-  border-bottom: var(--line-soft);
-  background: var(--paper);
-}
-.photo-card-head .idx{ font-family:var(--font-mono); font-size:.62rem; color:var(--ink-40); }
-.photo-card-head .fname{ font-weight:600; font-size:.8rem; font-family:var(--font-serif); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:9rem; }
-.photo-card-head .fname-wrap{ min-width:0; }
-
-/* ---------- área de recorte ----------
-   Compacta y contenida: el marco de encuadre es el protagonista visual,
-   pero la tarjeta entera ya no ocupa toda la altura de la pantalla. */
-.photo-preview{
-  background: var(--ink-08);
-  height: 210px;
-  display:flex; align-items:center; justify-content:center;
-  padding: .85rem;
-  position:relative;
-}
+/* ---------- área de recorte (compartida: foto grande y miniaturas) ---------- */
 .crop-container{
   position:relative;
   background:var(--card);
@@ -76,20 +34,13 @@
   box-shadow: inset 0 0 0 9999px rgba(19,18,17,.18);
 }
 
-/* ---------- controles de encuadre (siempre visibles, compactos) ---------- */
-.photo-edit-controls{
-  display:flex; align-items:center; gap:.45rem;
-  padding:.55rem .85rem;
-  background:var(--paper);
-  border-bottom: var(--line-soft);
-}
 .btn-icon{
   border: var(--line-soft);
   background:var(--card);
   border-radius: var(--r-sm);
-  width:1.7rem; height:1.7rem;
+  width:1.9rem; height:1.9rem;
   display:flex; align-items:center; justify-content:center;
-  font-size:.9rem;
+  font-size:.95rem;
   cursor:pointer;
   line-height:1;
   flex-shrink:0;
@@ -97,75 +48,191 @@
 .btn-icon:hover{ background:var(--yellow-pale); }
 .zoom-slider{ flex-grow:1; min-width:0; accent-color:var(--ink); }
 
-/* ---------- ajustes: opcionales y colapsados, igual criterio que
-   la config "global colapsable" del wizard de impresión ---------- */
-.photo-color-panel{ border-bottom: var(--line-soft); }
-.photo-color-panel summary{
-  padding:.5rem .85rem;
-  font-size:.68rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--ink-60);
-  cursor:pointer; list-style:none; user-select:none;
-  display:flex; align-items:center; justify-content:space-between;
-}
-.photo-color-panel summary::-webkit-details-marker{ display:none; }
-.photo-color-panel summary::after{ content:'▾'; color:var(--ink-40); }
-.photo-color-panel[open] summary::after{ content:'▴'; }
-.photo-color-panel-content{
-  padding: 0 .85rem .8rem;
-  display:flex; flex-direction:column; gap:.5rem;
-}
 .color-row{ display:flex; align-items:center; gap:.5rem; font-size:.76rem; }
 .color-row label{ min-width:5.2rem; color:var(--ink-60); font-weight:500; flex-shrink:0; }
 .color-row input[type="range"]{ flex-grow:1; accent-color:var(--ink); }
-.color-row input[type="checkbox"]{ accent-color:var(--ink); }
 
-/* Toggle de Blanco y Negro: se destaca como acción principal (es el único
-   efecto no-slider que pedimos mantener), separado de los sliders finos. */
-.byn-toggle{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:.5rem .85rem;
-  border-bottom: var(--line-soft);
+/* =========================================================
+   MODO EDITOR — activo cuando body.is-photo-editor
+   (el Paso 2 tiene fotos cargadas). Encoge/aplana el chrome del
+   wizard para maximizar el espacio de la foto.
+   ========================================================= */
+body.is-photo-editor .shell{ padding-left:0; padding-right:0; }
+body.is-photo-editor .stepline{
+  border-bottom:none;
+  margin-bottom:.5rem;
+  padding:0 1.25rem .4rem;
 }
-.byn-toggle label{ font-size:.78rem; font-weight:600; color:var(--ink); }
-.byn-toggle .segmented{ transform:scale(.88); transform-origin:right center; }
+body.is-photo-editor .panel-head{ display:none; } /* el título "Subí y editá tus fotos" cede lugar al editor */
+body.is-photo-editor #dropzoneMore{ display:none; } /* el filmstrip ya tiene su propio botón "+" */
+body.is-photo-editor #detailsAjustesGlobales{ margin: 0 1.1rem .5rem; }
 
-/* ---------- pie: tamaño + copias + precio ---------- */
-.photo-card-foot{
-  display:grid; grid-template-columns: 1fr 4rem auto;
-  gap:.5rem; align-items:end;
-  padding:.75rem .85rem;
+/* Nav inferior: sin fondo/borde en modo editor, más compacta, solo flechas */
+body.is-photo-editor .wizard-nav{
+  background:transparent;
+  border-top:none;
+  padding:.5rem .9rem .85rem;
 }
-.photo-card-foot .field{ margin:0; }
-.photo-card-foot label{ font-size:.66rem; }
-.photo-card-foot .select, .photo-card-foot .input{ padding:.45rem .55rem; font-size:.8rem; }
-.photo-remove{
-  border:var(--line-soft); border-radius:var(--r-sm); background:var(--card); width:2.1rem; height:2.1rem;
-  display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-60);
-  align-self:end; flex-shrink:0;
+body.is-photo-editor .wizard-nav .btn{
+  padding:.5rem .65rem;
+  box-shadow:none;
 }
-.photo-remove:hover{ background:var(--danger); color:#fff; border-color:var(--danger); }
+body.is-photo-editor .wizard-nav .nav-label{ display:none; }
+body.is-photo-editor .wizard-nav .nav-arrow{ font-size:1.15rem; }
+body.is-photo-editor .wizard-nav .price-peek .amt{
+  color:#fff;
+  background:var(--ink);
+  padding:.15rem .55rem;
+  border-radius:var(--r-sm);
+}
 
-.dim-line{
-  display:flex; align-items:center; justify-content:space-between; gap:.5rem;
-  font-family: var(--font-mono);
-  font-size:.7rem;
-  color: var(--ink-60);
-  padding: .65rem .85rem;
-  border-top: 1px dashed var(--ink-15);
+/* ---------- barra de iconos superior (tipo WhatsApp) ---------- */
+.pe-toolbar{
+  display:flex; align-items:center; gap:.4rem;
+  padding:.5rem .9rem;
 }
-.dim-line .result{ color:var(--ink); font-weight:600; }
-.dim-line .result .amt{ color:var(--ink); background:var(--yellow); padding:.05rem .4rem; border-radius:var(--r-sm); }
+.pe-icon-btn{
+  width:2.3rem; height:2.3rem;
+  border-radius:50%;
+  border:none;
+  background:transparent;
+  color:var(--ink-60);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  flex-shrink:0;
+}
+.pe-icon-btn svg{ width:19px; height:19px; }
+.pe-icon-btn:hover{ background:var(--ink-08); color:var(--ink); }
+.pe-icon-btn.is-on{ background:var(--ink); color:#fff; }
+.pe-icon-btn.pe-danger:hover{ background:var(--danger); color:#fff; }
+.pe-toolbar-spacer{ flex-grow:1; }
 
-/* ---------- estado de subida (ahora aparece recién al confirmar el Paso 2,
-   no por foto individual mientras se edita) ---------- */
+/* ---------- panel de ajustes finos (brillo/contraste/saturación),
+   se despliega desde el ícono "adjust" de la barra ---------- */
+.pe-adjust-panel{
+  display:none;
+  flex-direction:column; gap:.5rem;
+  padding:.75rem 1.1rem 1rem;
+  background:var(--paper);
+  border-radius:var(--r-md);
+  margin:0 .9rem .6rem;
+}
+.pe-adjust-panel.is-open{ display:flex; }
+
+/* ---------- stage: foto grande, ocupa el alto disponible ---------- */
+.pe-stage{
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  padding: .5rem 1rem;
+  min-height: 300px;
+  height: 52vh;
+  max-height: 640px;
+}
+.pe-stage .crop-container{ max-width:100%; max-height:100%; }
+
+.pe-nav-arrow{
+  position:absolute; top:50%; transform:translateY(-50%);
+  width:2.4rem; height:2.4rem;
+  border-radius:50%;
+  border:none;
+  background: rgba(19,18,17,.35);
+  color:#fff;
+  font-size:1.5rem;
+  line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+}
+.pe-nav-arrow:hover{ background: rgba(19,18,17,.55); }
+.pe-nav-arrow:disabled{ opacity:0; pointer-events:none; }
+.pe-nav-prev{ left:.6rem; }
+.pe-nav-next{ right:.6rem; }
+
+/* ---------- zoom, debajo del stage ---------- */
+.pe-zoom-row{
+  display:flex; align-items:center; gap:.5rem;
+  padding:.4rem 1.1rem;
+  max-width:26rem; margin:0 auto;
+}
+
+/* ---------- tamaño / copias / precio de la foto actual ---------- */
+.pe-specs-row{
+  display:grid; grid-template-columns: 1fr 4.5rem auto;
+  gap:.6rem; align-items:end;
+  padding:.6rem 1.1rem;
+  max-width:30rem; margin:0 auto;
+}
+.pe-specs-row .field{ margin:0; }
+.pe-specs-row label{ font-size:.66rem; }
+.pe-price{
+  font-family:var(--font-mono);
+  font-weight:700;
+  font-size:.95rem;
+  color:var(--ink);
+  background:var(--yellow);
+  border-radius:var(--r-sm);
+  padding:.55rem .65rem;
+  white-space:nowrap;
+  align-self:end;
+  text-align:center;
+}
+
+/* ---------- carrusel de miniaturas ---------- */
+.pe-filmstrip{
+  display:flex; gap:.5rem;
+  overflow-x:auto;
+  padding: .75rem 1.1rem 1.1rem;
+  scroll-behavior:smooth;
+}
+.pe-thumb{
+  flex:0 0 auto;
+  width:3.4rem; height:3.4rem;
+  border-radius:var(--r-sm);
+  overflow:hidden;
+  position:relative;
+  border: 2px solid transparent;
+  cursor:pointer;
+  background:var(--ink-08);
+}
+.pe-thumb.is-active{ border-color:var(--ink); }
+.pe-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.pe-thumb-status{
+  position:absolute; bottom:2px; right:2px;
+  width:.9rem; height:.9rem;
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.55rem;
+  background:rgba(19,18,17,.65);
+  color:#fff;
+}
+.pe-thumb-status.is-pending{ background:rgba(19,18,17,.4); }
+.pe-thumb-status.is-error{ background:var(--danger); }
+.pe-thumb-add{
+  flex:0 0 auto;
+  width:3.4rem; height:3.4rem;
+  border-radius:var(--r-sm);
+  border:1.5px dashed var(--ink-15);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--ink-40);
+  font-size:1.3rem;
+  cursor:pointer;
+  background:var(--paper);
+}
+.pe-thumb-add:hover{ border-color:var(--ink-40); color:var(--ink-60); }
+
+@media (max-width:640px){
+  .pe-stage{ height:44vh; min-height:260px; }
+  .pe-specs-row{ grid-template-columns: 1fr 3.6rem auto; }
+}
+
+/* =========================================================
+   ESTADO DE SUBIDA (se usa en el ícono del filmstrip, no ya en
+   tarjetas — se sube todo junto al confirmar el Paso 2)
+   ========================================================= */
 .upload-status{ font-family:var(--font-mono); font-size:.62rem; white-space:nowrap; display:flex; align-items:center; gap:.35rem; }
 .upload-status.is-uploading{ color:var(--ink-60); }
 .upload-status.is-ok{ color:#0a7a3d; }
 .upload-status.is-error{ color:var(--danger); }
 .upload-status.is-pending{ color:var(--ink-40); }
-
-@media (max-width:640px){
-  .photo-card-head .fname{ max-width:8.5rem; }
-}
 
 /* =========================================================
    OVERLAY DE SUBIDA — pantalla completa mientras se procesan/suben
