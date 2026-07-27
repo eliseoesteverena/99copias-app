@@ -54,37 +54,90 @@
 
 /* =========================================================
    MODO EDITOR — activo cuando body.is-photo-editor
-   (el Paso 2 tiene fotos cargadas). Encoge/aplana el chrome del
-   wizard para maximizar el espacio de la foto.
+   (el Paso 2 tiene fotos cargadas). El chrome del wizard entero cede
+   lugar al editor: se oculta el header del sitio y el stepline, y el
+   shell pasa a ocupar el alto completo de la ventana gráfica.
    ========================================================= */
-body.is-photo-editor .shell{ padding-left:0; padding-right:0; }
-body.is-photo-editor .stepline{
-  border-bottom:none;
-  margin-bottom:.5rem;
-  padding:0 1.25rem .4rem;
+html.is-photo-editor, body.is-photo-editor{
+  height:100%;
+  overflow:hidden; /* el scroll, si hace falta, queda contenido dentro del editor, no de la página */
 }
+body.is-photo-editor .site-header{ display:none; }
+body.is-photo-editor .shell{
+  padding:0;
+  max-width:none;
+  height:100vh;
+  height:100dvh; /* dvh evita el salto por la barra de direcciones del navegador mobile */
+  display:flex;
+  flex-direction:column;
+}
+body.is-photo-editor .stepline{ display:none; }
+body.is-photo-editor .panel{ flex:1; min-height:0; display:none; }
+body.is-photo-editor .panel.is-active{ display:flex; flex-direction:column; }
 body.is-photo-editor .panel-head{ display:none; } /* el título "Subí y editá tus fotos" cede lugar al editor */
 body.is-photo-editor #dropzoneMore{ display:none; } /* el filmstrip ya tiene su propio botón "+" */
-body.is-photo-editor #detailsAjustesGlobales{ margin: 0 1.1rem .5rem; }
+body.is-photo-editor #loadedWrap{ flex:1; min-height:0; display:flex; flex-direction:column; }
+body.is-photo-editor .photo-editor{ flex:1; min-height:0; display:flex; flex-direction:column; }
+body.is-photo-editor .pe-stage{ flex:1; height:auto; min-height:0; }
 
-/* Nav inferior: sin fondo/borde en modo editor, más compacta, solo flechas */
+/* Nav inferior: en modo editor pasa a position:static (deja de ser fixed),
+   viviendo dentro del flex-column del .shell junto al resto — así ocupa
+   exactamente el ancho disponible sin ningún riesgo de desbordar el
+   viewport por el left:0/right:0 + padding que tenía como fixed. */
 body.is-photo-editor .wizard-nav{
+  position:static;
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
   background:transparent;
   border-top:none;
-  padding:.5rem .9rem .85rem;
+  padding:.5rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px));
+  flex-shrink:0;
 }
 body.is-photo-editor .wizard-nav .btn{
   padding:.5rem .65rem;
   box-shadow:none;
 }
 body.is-photo-editor .wizard-nav .nav-label{ display:none; }
-body.is-photo-editor .wizard-nav .nav-arrow{ font-size:1.15rem; }
 body.is-photo-editor .wizard-nav .price-peek .amt{
   color:#fff;
   background:var(--ink);
   padding:.15rem .55rem;
   border-radius:var(--r-sm);
 }
+
+/* Botones Atrás/Continuar en modo editor: tecla física (cuerpo blanco,
+   borde+sombra offset negros, base más oscura asomando abajo), como en
+   la referencia de teclado — en vez del pill-button ghost/primary normal. */
+body.is-photo-editor .wizard-nav #btnBack,
+body.is-photo-editor .wizard-nav #btnNext{
+  width:2.9rem; height:2.9rem;
+  padding:0;
+  border-radius: .7rem;
+  background:var(--card);
+  border: 1.5px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+  color:var(--ink);
+  display:flex; align-items:center; justify-content:center;
+  transform:none;
+}
+body.is-photo-editor .wizard-nav #btnBack:hover,
+body.is-photo-editor .wizard-nav #btnNext:hover{
+  background:var(--yellow-pale);
+  transform:none;
+}
+body.is-photo-editor .wizard-nav #btnBack:active,
+body.is-photo-editor .wizard-nav #btnNext:active{
+  box-shadow: 0 1px 0 var(--ink);
+  transform: translateY(2px);
+}
+body.is-photo-editor .wizard-nav #btnBack:disabled,
+body.is-photo-editor .wizard-nav #btnNext:disabled{
+  opacity:.35;
+  box-shadow: 0 3px 0 var(--ink);
+  transform:none;
+}
+body.is-photo-editor .wizard-nav .nav-arrow{ font-size:1.25rem; line-height:1; }
 
 /* ---------- barra de iconos superior (tipo WhatsApp) ---------- */
 .pe-toolbar{

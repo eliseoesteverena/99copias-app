@@ -104,7 +104,6 @@ async function loadProductos() {
     if (!state.productos.length) {
       console.error('No hay ningún producto de tamaño habilitado para la categoría', CATEGORIA);
     }
-    renderTamanoGlobalOptions();
   } catch (err) {
     console.error('No se pudo cargar el catálogo de productos:', err);
     document.getElementById('rejectedAlert').textContent =
@@ -262,19 +261,22 @@ function selectTurno(t, cardEl) {
    ========================================================= */
 const TAMANO_MAXIMO_BYTES = 50 * 1024 * 1024; // 50 MB — debe coincidir con functions/api/lib/r2.js
 
-function renderTamanoGlobalOptions() {
-  const sel = document.getElementById('gTamano');
-  if (!sel) return;
-  sel.innerHTML = state.productos.map(p => `<option value="${p.codigo}">${labelTamano(p)}</option>`).join('');
+// Valores por defecto para una foto recién agregada. Ya no hay UI de
+// "ajustes para todas las fotos" — cada foto se configura individualmente
+// desde el editor (tamaño/copias en pe-specs-row, B&N en la barra de
+// iconos), así que acá solo definimos con qué arranca antes de que el
+// usuario la toque.
+function valoresPorDefectoFoto() {
+  return {
+    copias: 1,
+    tamano: (state.productos[0] || {}).codigo,
+    byn: false,
+  };
 }
 
-function readGlobalSettings() {
-  const bynBtn = document.querySelector('#gByn button.is-on');
-  return {
-    copias: parseInt(document.getElementById('gCopias').value, 10) || 1,
-    tamano: document.getElementById('gTamano').value || (state.productos[0] || {}).codigo,
-    byn: bynBtn ? bynBtn.dataset.value === '1' : false,
-  };
+function setModoEditorFotos(activo) {
+  document.documentElement.classList.toggle('is-photo-editor', activo);
+  document.body.classList.toggle('is-photo-editor', activo);
 }
 
 function estadoEdicionInicial() {
@@ -354,7 +356,7 @@ function addFiles(fileListObj) {
 
   if (!state.productos.length) return; // sin catálogo no podemos asignar tamaño/precio
 
-  const g = readGlobalSettings();
+  const g = valoresPorDefectoFoto();
   const newIds = [];
   accepted.forEach(f => {
     const id = 'f' + (++fileIdCounter);
@@ -378,7 +380,7 @@ function addFiles(fileListObj) {
   if (accepted.length) {
     document.getElementById('dzWrap').style.display = 'none';
     document.getElementById('loadedWrap').style.display = 'block';
-    document.body.classList.add('is-photo-editor');
+    setModoEditorFotos(true);
     if (!state.activePhotoId || !files.has(state.activePhotoId)) {
       state.activePhotoId = newIds[0];
     }
@@ -903,7 +905,7 @@ document.getElementById('peRemoveBtn').addEventListener('click', () => {
   files.delete(id);
 
   if (files.size === 0) {
-    document.body.classList.remove('is-photo-editor');
+    setModoEditorFotos(false);
     document.getElementById('dzWrap').style.display = 'block';
     document.getElementById('loadedWrap').style.display = 'none';
     state.activePhotoId = null;
@@ -974,26 +976,6 @@ document.getElementById('peCopias').addEventListener('input', e => {
 /* ---------- flechas de navegación entre fotos ---------- */
 document.getElementById('peArrowPrev').addEventListener('click', () => irAFotoRelativa(-1));
 document.getElementById('peArrowNext').addEventListener('click', () => irAFotoRelativa(1));
-
-
-document.getElementById('btnApplyAll').addEventListener('click', () => {
-  const g = readGlobalSettings();
-  files.forEach((entry, id) => {
-    entry.settings.tamano = g.tamano;
-    entry.settings.copias = g.copias;
-    entry.editState.byn = g.byn;
-  });
-  renderEditor();
-});
-
-document.querySelectorAll('#gByn').forEach(group => {
-  group.addEventListener('click', e => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    group.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
-    btn.classList.add('is-on');
-  });
-});
 
 /* Carga por dropzone + input "agregar más" */
 const dropzone = document.getElementById('dropzone');
@@ -1214,7 +1196,7 @@ function goToStep(n) {
   // El modo "editor full-size" (chrome compacto, sin stepline/título) sólo
   // aplica mientras se está en el Paso 2 con fotos cargadas — en cualquier
   // otro paso el wizard vuelve a verse con su nav completa normal.
-  document.body.classList.toggle('is-photo-editor', n === 2 && files.size > 0);
+  setModoEditorFotos(n === 2 && files.size > 0);
 
   if (n === 3) {
     document.getElementById('turnoZonaLabel').textContent = `Turnos disponibles para ${state.zona ? state.zona.nombre : 'tu zona'}.`;
