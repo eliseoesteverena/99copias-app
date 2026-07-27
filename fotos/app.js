@@ -422,9 +422,11 @@ async function subirFotoEditada(id) {
     if (!current) return;
     current.subiendo = false;
     current.errorSubida = err.message || 'No se pudo subir. Probá de nuevo.';
+    throw err; // re-lanzamos para que el orquestador (subirTodasLasFotos) lleve la cuenta de errores
+  } finally {
+    actualizarEstadoSubida(id);
+    updateNavState();
   }
-  actualizarEstadoSubida(id);
-  updateNavState();
 }
 
 // Cualquier cambio de encuadre/color invalida la última subida (si la había)
@@ -440,15 +442,130 @@ function marcarPendienteDeSubir(id) {
   updateNavState();
 }
 
-// Se llama al tocar "Continuar" en el Paso 2. Sube todas las fotos que todavía
-// no tengan r2Key (nuevas o editadas desde la última subida), en paralelo.
-// Devuelve true si todas terminaron OK.
-async function subirTodasLasFotos() {
-  const pendientes = [...files.entries()].filter(([, entry]) => !entry.r2Key);
-  if (!pendientes.length) return true;
-  await Promise.all(pendientes.map(([id]) => subirFotoEditada(id)));
-  return [...files.values()].every(entry => entry.r2Key && !entry.errorSubida);
+/* ---------- Overlay de subida ---------- */
+const overlayEl = document.getElementById('uploadOverlay');
+const overlayTitle = document.getElementById('uploadOverlayTitle');
+const overlaySub = document.getElementById('uploadOverlaySub');
+const overlayFill = document.getElementById('uploadOverlayFill');
+const overlayHint = document.getElementById('uploadOverlayHint');
+
+function abrirOverlay(total) {
+  overlayEl.classList.remove('has-error');
+  overlayEl.classList.add('is-active');
+  overlayEl.setAttribute('aria-hidden', 'false');
+  overlayHint.textContent = 'No cierres ni recargues esta pantalla';
+  actualizarOverlay(0, total, '');
+  // Evita que se cierre/recargue la pestaña sin querer a mitad de una subida
+  // que puede tardar (fotos grandes, muchas fotos, equipo lento) — perder el
+  // progreso acá obligaría a re-procesar todo desde cero.
+  window.addEventListener('beforeunload', prevenirCierreDurantesubida);
 }
+
+function cerrarOverlay() {
+  overlayEl.classList.remove('is-active', 'has-error');
+  overlayEl.setAttribute('aria-hidden', 'true');
+  window.removeEventListener('beforeunload', prevenirCierreDurantesubida);
+}
+
+function actualizarOverlay(hechas, total, nombreActual) {
+  overlayTitle.textContent = `Subiendo fotos ${hechas} de ${total}`;
+  overlaySub.textContent = nombreActual ? `Procesando "${truncarNombre(nombreActual, 28)}"` : 'Preparando…';
+  overlayFill.style.width = total ? Math.round((hechas / total) * 100) + '%' : '0%';
+}
+
+function prevenirCierreDurantesubida(e) {
+  e.preventDefault();
+  e.returnValue = '';
+}
+
+// Sube en tandas de a `concurrencia` para no saturar el navegador procesando
+// varios canvas pesados a la vez (lo que además haría que el contador de
+// progreso salte de golpe en vez de avanzar de forma legible).
+async function subirConProgreso(ids, concurrencia = 3) {
+  const total = ids.length;
+  let hechas = 0;
+  let huboError = false;
+  const cola = [...ids];
+
+  actualizarOverlay(0, total, files.get(cola[0])?.file.name);
+
+  async function worker() {
+    while (cola.length) {
+      const id = cola.shift();
+      const entry = files.get(id);
+      actualizarOverlay(hechas, total, entry ? entry.file.name : '');
+      try {
+        await subirFotoEditada(id);
+      } catch {
+        huboError = true;
+      }
+      hechas++;
+      actualizarOverlay(hechas, total, cola.length ? files.get(cola[0])?.file.name : '');
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrencia, total) }, worker);
+  await Promise.all(workers);
+  return !huboError;
+}
+
+// Se llama al tocar "Continuar" en el Paso 2. Sube todas las fotos que todavía
+// no tengan r2Key (nuevas o editadas desde la última subida). Muestra el
+// overlay de progreso mientras dura, y lo deja abierto con detalle de error
+// si algo falló, para que el usuario decida cómo seguir sin perder de vista
+// que quedó algo pendiente.
+async function subirTodasLasFotos() {
+  const pendientes = [...files.entries()].filter(([, entry]) => !entry.r2Key).map(([id]) => id);
+  if (!pendientes.length) return true;
+
+  abrirOverlay(pendientes.length);
+  const ok = await subirConProgreso(pendientes);
+
+  if (ok) {
+    cerrarOverlay();
+    return true;
+  }
+
+  const conError = [...files.values()].filter(e => e.errorSubida).length;
+  overlayEl.classList.add('has-error');
+  overlayTitle.textContent = conError === 1 ? 'Una foto no se pudo subir' : `${conError} fotos no se pudieron subir`;
+  overlaySub.textContent = 'Revisá cuál es en la lista, o reintentá todo de nuevo.';
+  overlayHint.textContent = '';
+  window.removeEventListener('beforeunload', prevenirCierreDurantesubida);
+  return false;
+}
+
+document.getElementById('btnOverlayRevisar').addEventListener('click', () => {
+  cerrarOverlay();
+  const [idConError] = [...files.entries()].find(([, e]) => e.errorSubida) || [];
+  if (idConError) {
+    const card = document.getElementById('card-' + idConError);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
+document.getElementById('btnOverlayReintentar').addEventListener('click', async () => {
+  const conError = [...files.entries()].filter(([, e]) => e.errorSubida).map(([id]) => id);
+  if (!conError.length) { cerrarOverlay(); return; }
+  overlayEl.classList.remove('has-error');
+  overlayHint.textContent = 'No cierres ni recargues esta pantalla';
+  window.addEventListener('beforeunload', prevenirCierreDurantesubida);
+  const ok = await subirConProgreso(conError);
+  if (ok) {
+    cerrarOverlay();
+    updateNavState();
+    // El usuario ya había tocado "Continuar" antes de este reintento — si
+    // ahora quedó todo subido y sigue en el Paso 2, completamos la acción
+    // que había pedido en vez de dejarlo varado con todo listo pero quieto.
+    if (state.step === 2 && stepValido(2)) goToStep(3);
+  } else {
+    const restantes = [...files.values()].filter(e => e.errorSubida).length;
+    overlayEl.classList.add('has-error');
+    overlayTitle.textContent = restantes === 1 ? 'Una foto no se pudo subir' : `${restantes} fotos no se pudieron subir`;
+    overlaySub.textContent = 'Revisá cuál es en la lista, o reintentá todo de nuevo.';
+    overlayHint.textContent = '';
+    window.removeEventListener('beforeunload', prevenirCierreDurantesubida);
+  }
+});
 
 function actualizarEstadoSubida(id) {
   const el = document.getElementById('upload-' + id);
@@ -952,10 +1069,9 @@ document.getElementById('btnNext').addEventListener('click', async () => {
   if (state.step === 2) {
     const btnNext = document.getElementById('btnNext');
     btnNext.disabled = true;
-    btnNext.textContent = 'Subiendo fotos…';
     const ok = await subirTodasLasFotos();
-    btnNext.textContent = 'Continuar →';
-    if (!ok) { updateNavState(); return; } // alguna quedó con error — se muestra en su tarjeta, con botón de reintentar
+    btnNext.disabled = !stepValido(state.step);
+    if (!ok) return; // el overlay queda abierto mostrando el error; la tarjeta con problema también lo señala
   }
 
   if (state.step < 5) goToStep(state.step + 1);

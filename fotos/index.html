@@ -195,6 +195,23 @@
 
 </div>
 
+<!-- ================= OVERLAY DE SUBIDA ================= -->
+<div class="upload-overlay" id="uploadOverlay" aria-live="polite" aria-hidden="true">
+  <div class="upload-overlay-box">
+    <svg class="upload-spinner" width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="42 18"/>
+    </svg>
+    <div class="upload-overlay-title" id="uploadOverlayTitle">Subiendo fotos 0 de 0</div>
+    <div class="upload-overlay-sub" id="uploadOverlaySub">Preparando…</div>
+    <div class="upload-overlay-bar"><div class="upload-overlay-bar-fill" id="uploadOverlayFill"></div></div>
+    <div class="upload-overlay-hint" id="uploadOverlayHint">No cierres ni recargues esta pantalla</div>
+    <div class="upload-overlay-actions">
+      <button type="button" class="btn btn-outline btn-sm" id="btnOverlayRevisar">Revisar fotos</button>
+      <button type="button" class="btn btn-primary btn-sm" id="btnOverlayReintentar">Reintentar todo</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= NAV INFERIOR ================= -->
 <div class="wizard-nav">
   <button type="button" class="btn btn-ghost" id="btnBack">← Atrás</button>
@@ -209,7 +226,7 @@
       { label: 'Precios', href: 'https://99copias.com.ar/#precios' },
       { label: 'Preguntas Frecuentes', href: 'https://99copias.com.ar/#faq' },
     ],
-    cta: { label: 'Imprimir', href: '/', ocultarEnUrls: ['/'] },
+    cta: { label: 'Imprimir', href: '/', ocultarEnUrls: ['/','/fotos'] },
   });
 </script>
 <script src="app.js"></script>
