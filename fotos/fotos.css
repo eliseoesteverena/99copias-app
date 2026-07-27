@@ -1,0 +1,128 @@
+/* =========================================================
+   EDITOR DE FOTOS — extiende el sistema visual de styles.css
+   ========================================================= */
+
+.photo-scroll{ display:flex; flex-direction:column; gap:1.25rem; }
+
+.photo-card{
+  background:var(--card);
+  border: var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  overflow:hidden;
+}
+
+.photo-card-head{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:1rem;
+  padding:.85rem 1.1rem;
+  border-bottom: var(--line-soft);
+  background: var(--paper);
+}
+.photo-card-head .idx{ font-family:var(--font-mono); font-size:.65rem; color:var(--ink-40); }
+.photo-card-head .fname{ font-weight:600; font-size:.85rem; font-family:var(--font-serif); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:16rem; }
+.photo-card-head .fname-wrap{ min-width:0; }
+
+/* ---------- área de recorte ---------- */
+.photo-preview{
+  background: var(--ink-08);
+  min-height: 320px;
+  display:flex; align-items:center; justify-content:center;
+  padding: 2rem 1.25rem;
+  position:relative;
+}
+.crop-container{
+  position:relative;
+  background:var(--card);
+  overflow:hidden;
+  cursor:grab;
+  touch-action:none;
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+.crop-container:active{ cursor:grabbing; }
+.crop-container.is-loading{ opacity:.35; }
+
+.image-movable{
+  position:absolute; top:50%; left:50%;
+  transform-origin:center;
+  pointer-events:none;
+}
+.image-movable img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+.crop-frame{ position:absolute; inset:0; box-sizing:border-box; pointer-events:none; }
+.crop-frame::after{
+  content:'';
+  position:absolute; inset:0;
+  border: 1.5px dashed rgba(255,255,255,.85);
+  box-shadow: inset 0 0 0 9999px rgba(19,18,17,.25);
+}
+
+/* ---------- controles de encuadre ---------- */
+.photo-edit-controls{
+  display:flex; align-items:center; gap:.6rem;
+  padding:.85rem 1.1rem;
+  background:var(--paper);
+  border-bottom: var(--line-soft);
+  flex-wrap:wrap;
+}
+.btn-icon{
+  border: var(--line-soft);
+  background:var(--card);
+  border-radius: var(--r-sm);
+  padding:.4rem .65rem;
+  font-size:.9rem;
+  cursor:pointer;
+  line-height:1;
+}
+.btn-icon:hover{ background:var(--yellow-pale); }
+.zoom-slider{ flex-grow:1; min-width:8rem; accent-color:var(--ink); }
+.zoom-label{ font-family:var(--font-mono); font-size:.65rem; color:var(--ink-60); white-space:nowrap; }
+
+/* ---------- panel de color individual (colapsable) ---------- */
+.photo-color-panel{ border-bottom: var(--line-soft); }
+.photo-color-panel summary{
+  padding:.65rem 1.1rem;
+  font-size:.78rem; font-weight:600; letter-spacing:.02em; text-transform:uppercase; color:var(--ink-60);
+  cursor:pointer; list-style:none; user-select:none;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.photo-color-panel summary::-webkit-details-marker{ display:none; }
+.photo-color-panel summary::after{ content:'▾'; color:var(--ink-40); }
+.photo-color-panel[open] summary::after{ content:'▴'; }
+.photo-color-panel-content{
+  padding: 0 1.1rem 1rem;
+  display:flex; flex-direction:column; gap:.6rem;
+}
+.color-row{ display:flex; align-items:center; gap:.6rem; font-size:.8rem; }
+.color-row label{ min-width:6rem; color:var(--ink-60); font-weight:500; flex-shrink:0; }
+.color-row input[type="range"]{ flex-grow:1; accent-color:var(--ink); }
+
+/* ---------- pie: tamaño + copias + precio ---------- */
+.photo-card-foot{
+  display:grid; grid-template-columns: 1fr 5.5rem auto;
+  gap:.75rem; align-items:end;
+  padding:1rem 1.1rem;
+}
+.photo-card-foot .field{ margin:0; }
+.photo-remove{
+  border:var(--line-soft); border-radius:var(--r-sm); background:var(--card); width:2.4rem; height:2.4rem;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-60);
+  align-self:end;
+}
+.photo-remove:hover{ background:var(--danger); color:#fff; border-color:var(--danger); }
+
+.dim-line{
+  display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+  font-family: var(--font-mono);
+  font-size:.74rem;
+  color: var(--ink-60);
+  padding: .85rem 1.1rem;
+  border-top: 1px dashed var(--ink-15);
+}
+.dim-line .result{ color:var(--ink); font-weight:600; }
+.dim-line .result .amt{ color:var(--ink); background:var(--yellow); padding:.05rem .45rem; border-radius:var(--r-sm); }
+
+@media (max-width:640px){
+  .photo-card-foot{ grid-template-columns: 1fr 4.5rem auto; }
+  .photo-card-head .fname{ max-width:9rem; }
+}
