@@ -2,7 +2,20 @@
    EDITOR DE FOTOS — extiende el sistema visual de styles.css
    ========================================================= */
 
-.photo-scroll{ display:flex; flex-direction:column; gap:1.25rem; }
+/* Grid de tarjetas: en mobile 1 columna (como antes), en desktop pasa a
+   grid para que el editor no se sienta "full width" — cada foto es una
+   tarjeta compacta, no una sección de página completa. */
+.photo-scroll{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:1.1rem;
+}
+@media (min-width: 720px){
+  .photo-scroll{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1180px){
+  .photo-scroll{ grid-template-columns: repeat(3, 1fr); }
+}
 
 .photo-card{
   background:var(--card);
@@ -10,25 +23,29 @@
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
   overflow:hidden;
+  display:flex;
+  flex-direction:column;
 }
 
 .photo-card-head{
   display:flex; align-items:center; justify-content:space-between;
-  gap:1rem;
-  padding:.85rem 1.1rem;
+  gap:.75rem;
+  padding:.65rem .85rem;
   border-bottom: var(--line-soft);
   background: var(--paper);
 }
-.photo-card-head .idx{ font-family:var(--font-mono); font-size:.65rem; color:var(--ink-40); }
-.photo-card-head .fname{ font-weight:600; font-size:.85rem; font-family:var(--font-serif); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:16rem; }
+.photo-card-head .idx{ font-family:var(--font-mono); font-size:.62rem; color:var(--ink-40); }
+.photo-card-head .fname{ font-weight:600; font-size:.8rem; font-family:var(--font-serif); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:9rem; }
 .photo-card-head .fname-wrap{ min-width:0; }
 
-/* ---------- área de recorte ---------- */
+/* ---------- área de recorte ----------
+   Compacta y contenida: el marco de encuadre es el protagonista visual,
+   pero la tarjeta entera ya no ocupa toda la altura de la pantalla. */
 .photo-preview{
   background: var(--ink-08);
-  min-height: 320px;
+  height: 210px;
   display:flex; align-items:center; justify-content:center;
-  padding: 2rem 1.25rem;
+  padding: .85rem;
   position:relative;
 }
 .crop-container{
@@ -38,6 +55,8 @@
   cursor:grab;
   touch-action:none;
   box-shadow: 0 0 0 1.5px var(--ink);
+  max-width:100%;
+  max-height:100%;
 }
 .crop-container:active{ cursor:grabbing; }
 .crop-container.is-loading{ opacity:.35; }
@@ -54,35 +73,36 @@
   content:'';
   position:absolute; inset:0;
   border: 1.5px dashed rgba(255,255,255,.85);
-  box-shadow: inset 0 0 0 9999px rgba(19,18,17,.25);
+  box-shadow: inset 0 0 0 9999px rgba(19,18,17,.18);
 }
 
-/* ---------- controles de encuadre ---------- */
+/* ---------- controles de encuadre (siempre visibles, compactos) ---------- */
 .photo-edit-controls{
-  display:flex; align-items:center; gap:.6rem;
-  padding:.85rem 1.1rem;
+  display:flex; align-items:center; gap:.45rem;
+  padding:.55rem .85rem;
   background:var(--paper);
   border-bottom: var(--line-soft);
-  flex-wrap:wrap;
 }
 .btn-icon{
   border: var(--line-soft);
   background:var(--card);
   border-radius: var(--r-sm);
-  padding:.4rem .65rem;
+  width:1.7rem; height:1.7rem;
+  display:flex; align-items:center; justify-content:center;
   font-size:.9rem;
   cursor:pointer;
   line-height:1;
+  flex-shrink:0;
 }
 .btn-icon:hover{ background:var(--yellow-pale); }
-.zoom-slider{ flex-grow:1; min-width:8rem; accent-color:var(--ink); }
-.zoom-label{ font-family:var(--font-mono); font-size:.65rem; color:var(--ink-60); white-space:nowrap; }
+.zoom-slider{ flex-grow:1; min-width:0; accent-color:var(--ink); }
 
-/* ---------- panel de color individual (colapsable) ---------- */
+/* ---------- ajustes: opcionales y colapsados, igual criterio que
+   la config "global colapsable" del wizard de impresión ---------- */
 .photo-color-panel{ border-bottom: var(--line-soft); }
 .photo-color-panel summary{
-  padding:.65rem 1.1rem;
-  font-size:.78rem; font-weight:600; letter-spacing:.02em; text-transform:uppercase; color:var(--ink-60);
+  padding:.5rem .85rem;
+  font-size:.68rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--ink-60);
   cursor:pointer; list-style:none; user-select:none;
   display:flex; align-items:center; justify-content:space-between;
 }
@@ -90,39 +110,59 @@
 .photo-color-panel summary::after{ content:'▾'; color:var(--ink-40); }
 .photo-color-panel[open] summary::after{ content:'▴'; }
 .photo-color-panel-content{
-  padding: 0 1.1rem 1rem;
-  display:flex; flex-direction:column; gap:.6rem;
+  padding: 0 .85rem .8rem;
+  display:flex; flex-direction:column; gap:.5rem;
 }
-.color-row{ display:flex; align-items:center; gap:.6rem; font-size:.8rem; }
-.color-row label{ min-width:6rem; color:var(--ink-60); font-weight:500; flex-shrink:0; }
+.color-row{ display:flex; align-items:center; gap:.5rem; font-size:.76rem; }
+.color-row label{ min-width:5.2rem; color:var(--ink-60); font-weight:500; flex-shrink:0; }
 .color-row input[type="range"]{ flex-grow:1; accent-color:var(--ink); }
+.color-row input[type="checkbox"]{ accent-color:var(--ink); }
+
+/* Toggle de Blanco y Negro: se destaca como acción principal (es el único
+   efecto no-slider que pedimos mantener), separado de los sliders finos. */
+.byn-toggle{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:.5rem .85rem;
+  border-bottom: var(--line-soft);
+}
+.byn-toggle label{ font-size:.78rem; font-weight:600; color:var(--ink); }
+.byn-toggle .segmented{ transform:scale(.88); transform-origin:right center; }
 
 /* ---------- pie: tamaño + copias + precio ---------- */
 .photo-card-foot{
-  display:grid; grid-template-columns: 1fr 5.5rem auto;
-  gap:.75rem; align-items:end;
-  padding:1rem 1.1rem;
+  display:grid; grid-template-columns: 1fr 4rem auto;
+  gap:.5rem; align-items:end;
+  padding:.75rem .85rem;
 }
 .photo-card-foot .field{ margin:0; }
+.photo-card-foot label{ font-size:.66rem; }
+.photo-card-foot .select, .photo-card-foot .input{ padding:.45rem .55rem; font-size:.8rem; }
 .photo-remove{
-  border:var(--line-soft); border-radius:var(--r-sm); background:var(--card); width:2.4rem; height:2.4rem;
+  border:var(--line-soft); border-radius:var(--r-sm); background:var(--card); width:2.1rem; height:2.1rem;
   display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-60);
-  align-self:end;
+  align-self:end; flex-shrink:0;
 }
 .photo-remove:hover{ background:var(--danger); color:#fff; border-color:var(--danger); }
 
 .dim-line{
   display:flex; align-items:center; justify-content:space-between; gap:.5rem;
   font-family: var(--font-mono);
-  font-size:.74rem;
+  font-size:.7rem;
   color: var(--ink-60);
-  padding: .85rem 1.1rem;
+  padding: .65rem .85rem;
   border-top: 1px dashed var(--ink-15);
 }
 .dim-line .result{ color:var(--ink); font-weight:600; }
-.dim-line .result .amt{ color:var(--ink); background:var(--yellow); padding:.05rem .45rem; border-radius:var(--r-sm); }
+.dim-line .result .amt{ color:var(--ink); background:var(--yellow); padding:.05rem .4rem; border-radius:var(--r-sm); }
+
+/* ---------- estado de subida (ahora aparece recién al confirmar el Paso 2,
+   no por foto individual mientras se edita) ---------- */
+.upload-status{ font-family:var(--font-mono); font-size:.62rem; white-space:nowrap; display:flex; align-items:center; gap:.35rem; }
+.upload-status.is-uploading{ color:var(--ink-60); }
+.upload-status.is-ok{ color:#0a7a3d; }
+.upload-status.is-error{ color:var(--danger); }
+.upload-status.is-pending{ color:var(--ink-40); }
 
 @media (max-width:640px){
-  .photo-card-foot{ grid-template-columns: 1fr 4.5rem auto; }
-  .photo-card-head .fname{ max-width:9rem; }
+  .photo-card-head .fname{ max-width:8.5rem; }
 }

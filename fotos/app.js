@@ -86,7 +86,12 @@ async function apiPost(url, body) {
 
 async function loadProductos() {
   try {
-    state.productos = await apiGet('/api/productos?categoria=' + encodeURIComponent(CATEGORIA));
+    const catalogoCrudo = await apiGet('/api/productos?categoria=' + encodeURIComponent(CATEGORIA));
+    // El endpoint devuelve también productos transversales (categoria_id NULL,
+    // ej. "Anillado", "Suelto", "Abrochado" — acabados del catálogo de
+    // impresión). Fotos no tiene acabados: nos quedamos solo con productos
+    // cuyo código matchea el patrón de tamaño ("10x15_comun", "13x18_mate", etc).
+    state.productos = catalogoCrudo.filter(p => /^\d+x\d+/i.test(p.codigo));
     // Ordenamos por área (ancho×alto) para que el selector quede de menor a mayor.
     state.productos.sort((a, b) => {
       const da = (a.codigo.match(/^(\d+)x(\d+)/i) || []).slice(1).map(Number);
@@ -96,7 +101,7 @@ async function loadProductos() {
       return areaA - areaB;
     });
     if (!state.productos.length) {
-      console.error('No hay ningún producto habilitado para la categoría', CATEGORIA);
+      console.error('No hay ningún producto de tamaño habilitado para la categoría', CATEGORIA);
     }
     renderTamanoGlobalOptions();
   } catch (err) {
@@ -279,6 +284,17 @@ function estadoEdicionInicial() {
   };
 }
 
+// Filtro CSS/canvas compartido entre el preview en vivo y la exportación final.
+// El "Blanco y negro" del prototipo no es solo desaturar: es un look de foto
+// en B&N con más contraste y un leve empujón de brillo (ver fotos_final.html,
+// updateVisuals()) — grayscale(100%) se agrega ENCIMA de brillo/contraste/
+// saturación base, no los reemplaza.
+function construirFiltroCss(st) {
+  let filt = `brightness(${st.brightness}) contrast(${st.contrast}) saturate(${st.saturate})`;
+  if (st.byn) filt += ` grayscale(100%) contrast(1.5) brightness(1.05)`;
+  return filt;
+}
+
 function addFiles(fileListObj) {
   const accepted = [], rejected = [], demasiadoGrandes = [];
   Array.from(fileListObj).forEach(f => {
@@ -309,6 +325,8 @@ function addFiles(fileListObj) {
       file: f, thumbUrl, naturalW: 0, naturalH: 0,
       settings: { copias: g.copias, tamano: g.tamano },
       editState: { ...estadoEdicionInicial(), byn: g.byn },
+      // La subida a R2 ya no ocurre por edición — se sube una única vez cuando
+      // el usuario confirma el Paso 2 tocando "Continuar" (ver subirTodasLasFotos()).
       r2Key: null, subiendo: false, errorSubida: null,
     });
     newIds.push(id);
@@ -318,7 +336,6 @@ function addFiles(fileListObj) {
     document.getElementById('dzWrap').style.display = 'none';
     document.getElementById('loadedWrap').style.display = 'block';
     renderFileList();
-    newIds.forEach(id => subirFotoEditada(id));
   }
   updateNavState();
 }
@@ -353,7 +370,7 @@ function exportarFotoBlob(id) {
     canvas.height = Math.max(1, Math.round(srcH));
     const ctx = canvas.getContext('2d');
 
-    let cssFilt = `brightness(${st.brightness}) contrast(${st.contrast}) saturate(${st.byn ? 0 : st.saturate})`;
+    let cssFilt = construirFiltroCss(st);
     ctx.filter = cssFilt;
     ctx.drawImage(imgEl, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
 
@@ -361,6 +378,9 @@ function exportarFotoBlob(id) {
   });
 }
 
+// Sube (o re-sube, si ya se había subido antes) el JPEG final de una foto a
+// staging/. Ya no se llama en cada edición — se llama una sola vez por foto
+// cuando el usuario confirma el Paso 2 (ver subirTodasLasFotos()).
 async function subirFotoEditada(id) {
   const entry = files.get(id);
   if (!entry) return;
@@ -370,10 +390,10 @@ async function subirFotoEditada(id) {
 
   try {
     const blob = await exportarFotoBlob(id);
-    if (!blob) throw new Error('No se pudo procesar la foto todavía. Probá de nuevo en un segundo.');
+    if (!blob) throw new Error('No se pudo procesar la foto. Probá de nuevo.');
 
-    // Si ya había una versión subida a staging (de una edición anterior), la borramos
-    // después de subir la nueva, para no dejar huérfanos — cada edición sube un objeto nuevo.
+    // Si ya había una versión subida (de un "Continuar" anterior seguido de un
+    // "Atrás" para seguir editando), la borramos después de subir la nueva.
     const keyPrevia = entry.r2Key;
 
     const nombreExport = entry.file.name.replace(/\.[^/.]+$/, '') + '.jpg';
@@ -407,15 +427,27 @@ async function subirFotoEditada(id) {
   updateNavState();
 }
 
-// Re-exporta y re-sube la foto tras un cambio de encuadre/color. Debounced para no
-// generar un POST por cada pixel arrastrado — se dispara una vez que el usuario deja
-// de tocar los controles.
-const debounceReupload = new Map(); // id -> timeout
-function programarReupload(id) {
-  if (debounceReupload.has(id)) clearTimeout(debounceReupload.get(id));
+// Cualquier cambio de encuadre/color invalida la última subida (si la había)
+// y vuelve a marcar la foto como "pendiente" — no dispara red. La subida real
+// ocurre recién al tocar "Continuar" (ver subirTodasLasFotos()).
+function marcarPendienteDeSubir(id) {
   const entry = files.get(id);
-  if (entry) { entry.errorSubida = null; }
-  debounceReupload.set(id, setTimeout(() => subirFotoEditada(id), 700));
+  if (!entry) return;
+  entry.r2Key = null;
+  entry.errorSubida = null;
+  entry.subiendo = false;
+  actualizarEstadoSubida(id);
+  updateNavState();
+}
+
+// Se llama al tocar "Continuar" en el Paso 2. Sube todas las fotos que todavía
+// no tengan r2Key (nuevas o editadas desde la última subida), en paralelo.
+// Devuelve true si todas terminaron OK.
+async function subirTodasLasFotos() {
+  const pendientes = [...files.entries()].filter(([, entry]) => !entry.r2Key);
+  if (!pendientes.length) return true;
+  await Promise.all(pendientes.map(([id]) => subirFotoEditada(id)));
+  return [...files.values()].every(entry => entry.r2Key && !entry.errorSubida);
 }
 
 function actualizarEstadoSubida(id) {
@@ -431,8 +463,8 @@ function actualizarEstadoSubida(id) {
 function estadoSubidaHtml(id, entry) {
   if (entry.subiendo) return `<span class="upload-status is-uploading">⟳ Subiendo…</span>`;
   if (entry.errorSubida) return `<span class="upload-status is-error">⚠ ${entry.errorSubida} <button type="button" class="btn btn-sm btn-outline" data-retry="${id}">Reintentar</button></span>`;
-  if (entry.r2Key) return `<span class="upload-status is-ok">✓ Subido</span>`;
-  return '';
+  if (entry.r2Key) return `<span class="upload-status is-ok">✓ Lista</span>`;
+  return `<span class="upload-status is-pending">Pendiente</span>`;
 }
 
 function renderFileList() {
@@ -468,13 +500,17 @@ function renderFileList() {
         <span class="zoom-label">Arrastrá la foto para moverla</span>
       </div>
 
+      <div class="byn-toggle">
+        <label>Blanco y negro</label>
+        <div class="segmented local-byn" data-id="${id}">
+          <button type="button" data-value="0" class="${entry.editState.byn ? '' : 'is-on'}">Color</button>
+          <button type="button" data-value="1" class="${entry.editState.byn ? 'is-on' : ''}">B&amp;N</button>
+        </div>
+      </div>
+
       <details class="photo-color-panel">
-        <summary>Color y ajustes</summary>
+        <summary>Ajustes opcionales</summary>
         <div class="photo-color-panel-content">
-          <div class="color-row">
-            <label>Blanco y negro</label>
-            <input type="checkbox" data-key="byn" data-id="${id}" ${entry.editState.byn ? 'checked' : ''}>
-          </div>
           <div class="color-row"><label>Brillo</label><input type="range" data-key="brightness" data-id="${id}" min="0.6" max="1.4" step="0.02" value="${entry.editState.brightness}"></div>
           <div class="color-row"><label>Contraste</label><input type="range" data-key="contrast" data-id="${id}" min="0.6" max="1.4" step="0.02" value="${entry.editState.contrast}"></div>
           <div class="color-row"><label>Saturación</label><input type="range" data-key="saturate" data-id="${id}" min="0" max="2" step="0.1" value="${entry.editState.saturate}" ${entry.editState.byn ? 'disabled' : ''}></div>
@@ -556,9 +592,7 @@ function initPhotoCard(id, card, entry) {
   };
 
   const applyFilters = () => {
-    const st = entry.editState;
-    let filt = `brightness(${st.brightness}) contrast(${st.contrast}) saturate(${st.byn ? 0 : st.saturate})`;
-    imgEl.style.filter = filt;
+    imgEl.style.filter = construirFiltroCss(entry.editState);
   };
 
   imgEl.onload = () => {
@@ -577,50 +611,58 @@ function initPhotoCard(id, card, entry) {
     slider.value = 1;
     updateView();
     updateDim(id);
-    programarReupload(id);
+    marcarPendienteDeSubir(id);
   });
 
   slider.addEventListener('input', e => {
     entry.editState.scale = parseFloat(e.target.value);
     updateView();
-    programarReupload(id);
+    marcarPendienteDeSubir(id);
   });
   card.querySelector('[data-action="zoom-in"]').addEventListener('click', () => {
     slider.value = Math.min(3, parseFloat(slider.value) + 0.1);
     entry.editState.scale = parseFloat(slider.value);
     updateView();
-    programarReupload(id);
+    marcarPendienteDeSubir(id);
   });
   card.querySelector('[data-action="zoom-out"]').addEventListener('click', () => {
     slider.value = Math.max(1, parseFloat(slider.value) - 0.1);
     entry.editState.scale = parseFloat(slider.value);
     updateView();
-    programarReupload(id);
+    marcarPendienteDeSubir(id);
   });
 
   // Arrastre del encuadre (mouse + touch)
   let isDown = false, sX, sY, iX, iY;
   cropContainer.addEventListener('mousedown', e => { isDown = true; sX = e.clientX; sY = e.clientY; iX = entry.editState.panX; iY = entry.editState.panY; });
   window.addEventListener('mousemove', e => { if (isDown) { entry.editState.panX = iX + (e.clientX - sX); entry.editState.panY = iY + (e.clientY - sY); updateView(); } });
-  window.addEventListener('mouseup', () => { if (isDown) { isDown = false; programarReupload(id); } });
+  window.addEventListener('mouseup', () => { if (isDown) { isDown = false; marcarPendienteDeSubir(id); } });
 
   cropContainer.addEventListener('touchstart', e => { if (e.touches.length === 1) { isDown = true; sX = e.touches[0].clientX; sY = e.touches[0].clientY; iX = entry.editState.panX; iY = entry.editState.panY; } }, { passive: false });
   window.addEventListener('touchmove', e => { if (isDown && e.touches.length === 1) { e.preventDefault(); entry.editState.panX = iX + (e.touches[0].clientX - sX); entry.editState.panY = iY + (e.touches[0].clientY - sY); updateView(); } }, { passive: false });
-  window.addEventListener('touchend', () => { if (isDown) { isDown = false; programarReupload(id); } });
+  window.addEventListener('touchend', () => { if (isDown) { isDown = false; marcarPendienteDeSubir(id); } });
 
-  // Panel de color individual
+  // Toggle Blanco y negro
+  const bynGroup = card.querySelector('.local-byn');
+  bynGroup.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const val = btn.dataset.value === '1';
+    entry.editState.byn = val;
+    bynGroup.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
+    btn.classList.add('is-on');
+    const satInput = card.querySelector('[data-key="saturate"]');
+    if (satInput) satInput.disabled = val;
+    applyFilters();
+    marcarPendienteDeSubir(id);
+  });
+
+  // Sliders de ajustes opcionales (brillo/contraste/saturación)
   card.querySelectorAll('[data-key]').forEach(input => {
-    const evt = input.type === 'checkbox' ? 'change' : 'input';
-    input.addEventListener(evt, () => {
-      const key = input.dataset.key;
-      const val = input.type === 'checkbox' ? input.checked : parseFloat(input.value);
-      entry.editState[key] = val;
-      if (key === 'byn') {
-        const satInput = card.querySelector('[data-key="saturate"]');
-        if (satInput) satInput.disabled = val;
-      }
+    input.addEventListener('input', () => {
+      entry.editState[input.dataset.key] = parseFloat(input.value);
       applyFilters();
-      programarReupload(id);
+      marcarPendienteDeSubir(id);
     });
   });
 
@@ -634,7 +676,6 @@ function initPhotoCard(id, card, entry) {
   card.querySelector('[data-remove]').addEventListener('click', () => {
     if (entry.thumbUrl) URL.revokeObjectURL(entry.thumbUrl);
     if (entry.r2Key) fetch('/api/archivos?key=' + encodeURIComponent(entry.r2Key), { method: 'DELETE' }).catch(() => {});
-    if (debounceReupload.has(id)) clearTimeout(debounceReupload.get(id));
     files.delete(id);
     if (files.size === 0) {
       document.getElementById('dzWrap').style.display = 'block';
@@ -856,7 +897,7 @@ function stepValido(n) {
       if (!state.zona) return false;
       if (state.zona.es_retiro) return true;
       return !!document.getElementById('direccionEntrega').value.trim();
-    case 2: return files.size > 0 && [...files.values()].every(e => e.r2Key && !e.subiendo && !e.errorSubida);
+    case 2: return files.size > 0 && [...files.values()].every(e => !e.subiendo && !e.errorSubida);
     case 3: return !!(state.fecha && state.turno);
     case 4: return clienteFormValido();
     default: return true;
@@ -905,8 +946,18 @@ function goToStep(n) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-document.getElementById('btnNext').addEventListener('click', () => {
+document.getElementById('btnNext').addEventListener('click', async () => {
   if (!stepValido(state.step)) return;
+
+  if (state.step === 2) {
+    const btnNext = document.getElementById('btnNext');
+    btnNext.disabled = true;
+    btnNext.textContent = 'Subiendo fotos…';
+    const ok = await subirTodasLasFotos();
+    btnNext.textContent = 'Continuar →';
+    if (!ok) { updateNavState(); return; } // alguna quedó con error — se muestra en su tarjeta, con botón de reintentar
+  }
+
   if (state.step < 5) goToStep(state.step + 1);
 });
 document.getElementById('btnBack').addEventListener('click', () => {
