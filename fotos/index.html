@@ -75,32 +75,40 @@
         <div class="pe-toolbar" id="peToolbar">
           <button type="button" class="pe-icon-btn" data-action="rotate" title="Rotar marco 90°">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.6 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12V7h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="pe-icon-label">Rotar</span>
           </button>
           <button type="button" class="pe-icon-btn" data-action="flip-h" title="Espejo horizontal">
             <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M7 7l-3 5 3 5M17 7l3 5-3 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="pe-icon-label">Espejo</span>
           </button>
           <button type="button" class="pe-icon-btn" id="peBynBtn" data-action="byn" title="Blanco y negro">
             <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/></svg>
+            <span class="pe-icon-label">B/N</span>
           </button>
           <button type="button" class="pe-icon-btn" data-action="adjust" title="Brillo, contraste y saturación">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h9M4 12h16M4 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="currentColor"/><circle cx="19" cy="17" r="2" fill="currentColor"/></svg>
+            <span class="pe-icon-label">Ajustes</span>
           </button>
 
           <div class="pe-toolbar-sep"></div>
 
-          <button type="button" class="pe-icon-btn" data-action="zoom" title="Zoom">
+          <button type="button" class="pe-icon-btn pe-icon-btn-specs" data-action="zoom" title="Zoom">
             <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.5 11h5M11 8.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span class="pe-icon-label">Zoom</span>
           </button>
-          <button type="button" class="pe-icon-btn" data-action="tamano" title="Tamaño">
+          <button type="button" class="pe-icon-btn pe-icon-btn-specs" data-action="tamano" title="Tamaño">
             <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 6V4M16 6V4M8 20v-2M16 20v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span class="pe-icon-label">Tamaño</span>
           </button>
-          <button type="button" class="pe-icon-btn" data-action="copias" title="Copias">
+          <button type="button" class="pe-icon-btn pe-icon-btn-specs" data-action="copias" title="Copias">
             <svg viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 16V5.5A1.5 1.5 0 0 1 6 4h10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span class="pe-icon-label">Copias</span>
           </button>
 
           <div class="pe-toolbar-spacer"></div>
           <button type="button" class="pe-icon-btn pe-danger" id="peRemoveBtn" title="Quitar esta foto">
             <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="pe-icon-label">Quitar</span>
           </button>
         </div>
 
@@ -130,6 +138,13 @@
             <div class="field">
               <label>Tamaño</label>
               <select class="select" id="peTamano"></select>
+            </div>
+            <div class="pe-apply-all" id="peApplyAllRow">
+              <label for="peApplyAllCheck">
+                <input type="checkbox" id="peApplyAllCheck">
+                Aplicar a todas las fotos
+              </label>
+              <button type="button" class="btn btn-primary btn-sm" id="peApplyAllConfirm">Confirmar</button>
             </div>
           </div>
 

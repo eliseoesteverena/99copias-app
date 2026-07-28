@@ -184,14 +184,30 @@ body.is-photo-editor .wizard-nav #btnNext .nav-ok{ display:inline-flex; }
   background:transparent;
   color:var(--ink-60);
   display:flex; align-items:center; justify-content:center;
+  gap:.35rem;
   cursor:pointer;
   flex-shrink:0;
 }
-.pe-icon-btn svg{ width:19px; height:19px; }
+.pe-icon-btn svg{ width:19px; height:19px; flex-shrink:0; }
 .pe-icon-btn:hover{ background:var(--ink-08); color:var(--ink); }
 .pe-icon-btn.is-on{ background:var(--ink); color:#fff; }
 .pe-icon-btn.pe-danger:hover{ background:var(--danger); color:#fff; }
 .pe-toolbar-spacer{ flex-grow:1; }
+
+/* Etiqueta de texto junto al ícono — oculta por defecto (solo ícono, como
+   hasta ahora). Los 3 controles de "specs" (zoom/tamaño/copias) la muestran
+   antes, desde 640px, porque son pocos y hay lugar de sobra; el resto de
+   los controles (encuadre/color + quitar) esperan a 1200px, cuando ya
+   entran los 7 botones con texto sin amontonarse. */
+.pe-icon-label{ display:none; font-size:.72rem; font-weight:600; white-space:nowrap; }
+@media (min-width:640px){
+  .pe-icon-btn-specs{ width:auto; height:auto; padding:.5rem .85rem .5rem .65rem; border-radius:999px; }
+  .pe-icon-btn-specs .pe-icon-label{ display:inline; }
+}
+@media (min-width:1200px){
+  .pe-icon-btn{ width:auto; height:auto; padding:.5rem .85rem .5rem .65rem; border-radius:999px; }
+  .pe-icon-btn .pe-icon-label{ display:inline; }
+}
 
 /* Separador entre el grupo de encuadre/color (rotar, espejo, B/N, ajustes)
    y el grupo de especificaciones del pedido (zoom, tamaño, copias) — mismo
@@ -205,24 +221,39 @@ body.is-photo-editor .wizard-nav #btnNext .nav-ok{ display:inline-flex; }
 }
 
 /* ---------- paneles desplegables (ajustes, zoom, tamaño, copias) ----------
-   position:absolute DENTRO de .pe-stage: flotan por encima de la vista
-   previa de la foto en vez de empujarla hacia abajo — la foto nunca cambia
-   de tamaño al abrir un panel. Comparten la clase .pe-dropdown y se abren
-   de a uno (acordeón), identificados por [data-panel]. */
+   Misma apariencia que el drawer del header en mobile (.site-header-drawer):
+   full-width, fondo paper, borde inferior — no una tarjeta flotante con
+   esquinas redondeadas. position:absolute DENTRO de .pe-stage: flotan por
+   encima de la vista previa de la foto en vez de empujarla hacia abajo — la
+   foto nunca cambia de tamaño al abrir un panel. Comparten la clase
+   .pe-dropdown y se abren de a uno (acordeón), identificados por [data-panel]. */
 .pe-dropdown{
   display:none;
   position:absolute;
-  top:.6rem; left:.6rem; right:.6rem;
+  top:0; left:0; right:0;
   z-index:5;
-  flex-direction:column; gap:.5rem;
-  padding:.75rem 1rem .85rem;
-  background:var(--card);
-  border:1.5px solid var(--ink);
-  border-radius:var(--r-md);
-  box-shadow: 0 4px 0 var(--ink);
+  flex-direction:column; gap:.6rem;
+  padding:.9rem 1.1rem 1rem;
+  background:var(--paper);
+  border-bottom: var(--line);
 }
 .pe-dropdown.is-open{ display:flex; }
 .pe-dropdown .field{ margin:0; }
+
+/* ---------- "Aplicar a todas las fotos" dentro del panel de tamaño ---------- */
+.pe-apply-all{
+  display:flex; align-items:center; gap:.5rem;
+  padding-top:.3rem;
+  border-top: 1px solid var(--ink-08);
+}
+.pe-apply-all label{
+  display:flex; align-items:center; gap:.45rem;
+  font-size:.78rem; font-weight:500; color:var(--ink-60);
+  cursor:pointer;
+}
+.pe-apply-all input[type="checkbox"]{ accent-color:var(--ink); width:1rem; height:1rem; }
+.pe-apply-all .btn{ display:none; margin-left:auto; }
+.pe-apply-all.is-checked .btn{ display:inline-flex; }
 
 /* ---------- stage: foto grande, ocupa el alto disponible ---------- */
 .pe-stage{

@@ -699,6 +699,7 @@ const peEls = {
   adjustPanel: null, zoomPanel: null, tamanoPanel: null, copiasPanel: null,
   brightness: null, contrast: null, saturate: null,
   bynBtn: null, removeBtn: null, stage: null,
+  applyAllRow: null, applyAllCheck: null, applyAllConfirm: null,
 };
 function resolvePeEls() {
   peEls.toolbar = document.getElementById('peToolbar');
@@ -720,6 +721,9 @@ function resolvePeEls() {
   peEls.bynBtn = document.getElementById('peBynBtn');
   peEls.removeBtn = document.getElementById('peRemoveBtn');
   peEls.stage = document.getElementById('peStage');
+  peEls.applyAllRow = document.getElementById('peApplyAllRow');
+  peEls.applyAllCheck = document.getElementById('peApplyAllCheck');
+  peEls.applyAllConfirm = document.getElementById('peApplyAllConfirm');
 }
 
 function ordenFotos() {
@@ -938,6 +942,10 @@ function togglePeDropdown(nombre) {
 }
 function cerrarTodosLosDropdowns() {
   [peEls.adjustPanel, peEls.zoomPanel, peEls.tamanoPanel, peEls.copiasPanel].forEach(p => p && p.classList.remove('is-open'));
+  // El check de "aplicar a todas" no debería quedar marcado de una vista a
+  // otra — cada vez que el panel se cierra, arranca limpio la próxima vez.
+  if (peEls.applyAllCheck) peEls.applyAllCheck.checked = false;
+  if (peEls.applyAllRow) peEls.applyAllRow.classList.remove('is-checked');
 }
 
 document.getElementById('peToolbar').addEventListener('click', e => {
@@ -1039,6 +1047,27 @@ document.getElementById('peTamano').addEventListener('change', e => {
   renderFilmstrip();
   marcarPendienteDeSubir(state.activePhotoId);
 });
+
+document.getElementById('peApplyAllCheck').addEventListener('change', e => {
+  peEls.applyAllRow.classList.toggle('is-checked', e.target.checked);
+});
+document.getElementById('peApplyAllConfirm').addEventListener('click', () => {
+  const tamano = peEls.tamano.value;
+  files.forEach(entry => {
+    entry.settings.tamano = tamano;
+    // El encuadre depende de la relación de aspecto del tamaño — al cambiar
+    // el tamaño de una foto que no es la activa, reseteamos su zoom/paneo
+    // igual que se hace con la foto activa en el cambio individual de arriba.
+    entry.editState.scale = 1; entry.editState.panFracX = 0; entry.editState.panFracY = 0;
+    entry.r2Key = null; entry.errorSubida = null; entry.subiendo = false; // vuelven a "pendiente" para todas
+  });
+  actualizarStage();
+  actualizarSpecsRow();
+  renderFilmstrip();
+  cerrarTodosLosDropdowns();
+  updateNavState();
+});
+
 document.getElementById('peCopias').addEventListener('input', e => {
   const entry = activeEntry();
   if (!entry) return;
