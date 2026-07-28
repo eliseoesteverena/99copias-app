@@ -92,6 +92,14 @@ body.is-photo-editor .panel{ flex:1; min-height:0; display:none; }
 body.is-photo-editor .panel.is-active{ display:flex; flex-direction:column; }
 body.is-photo-editor .panel-head{ display:none; } /* el título "Subí y editá tus fotos" cede lugar al editor */
 body.is-photo-editor #dropzoneMore{ display:none; } /* el filmstrip ya tiene su propio botón "+" */
+/* Visibilidad de la dropzone inicial vs. el editor cargado — antes se
+   manejaba con estilos inline desde JS (elemento.style.display), lo cual
+   tiene más prioridad en cascada que cualquier regla de clase de acá abajo
+   y terminaba pisando el "display:flex" que necesita la cadena de flex del
+   editor para calcular su alto — colapsando el stage a 0px. Ahora la
+   visibilidad depende únicamente de la clase is-photo-editor. */
+#loadedWrap{ display:none; }
+body.is-photo-editor #dzWrap{ display:none; }
 body.is-photo-editor #loadedWrap{ flex:1; min-height:0; display:flex; flex-direction:column; }
 body.is-photo-editor .photo-editor{ flex:1; min-height:0; display:flex; flex-direction:column; }
 body.is-photo-editor .pe-stage{ flex:1; height:auto; min-height:0; max-height:none; }

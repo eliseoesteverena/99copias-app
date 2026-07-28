@@ -378,8 +378,6 @@ function addFiles(fileListObj) {
   });
 
   if (accepted.length) {
-    document.getElementById('dzWrap').style.display = 'none';
-    document.getElementById('loadedWrap').style.display = 'block';
     setModoEditorFotos(true);
     if (!state.activePhotoId || !files.has(state.activePhotoId)) {
       state.activePhotoId = newIds[0];
@@ -906,8 +904,6 @@ document.getElementById('peRemoveBtn').addEventListener('click', () => {
 
   if (files.size === 0) {
     setModoEditorFotos(false);
-    document.getElementById('dzWrap').style.display = 'block';
-    document.getElementById('loadedWrap').style.display = 'none';
     state.activePhotoId = null;
   } else {
     const ids = ordenFotos();
