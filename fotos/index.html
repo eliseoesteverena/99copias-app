@@ -103,8 +103,12 @@
             <div class="image-movable" id="peImageMovable"><img class="crop-source-img" id="peImg" src=""></div>
             <div class="crop-frame"></div>
           </div>
-          <button type="button" class="pe-nav-arrow pe-nav-prev" id="peArrowPrev" aria-label="Foto anterior">‹</button>
-          <button type="button" class="pe-nav-arrow pe-nav-next" id="peArrowNext" aria-label="Foto siguiente">›</button>
+          <button type="button" class="pe-nav-arrow pe-nav-prev" id="peArrowPrev" aria-label="Foto anterior">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button type="button" class="pe-nav-arrow pe-nav-next" id="peArrowNext" aria-label="Foto siguiente">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
         </div>
 
         <!-- zoom -->
@@ -253,9 +257,15 @@
 
 <!-- ================= NAV INFERIOR ================= -->
 <div class="wizard-nav" id="wizardNav">
-  <button type="button" class="btn btn-ghost" id="btnBack"><span class="nav-arrow">←</span><span class="nav-label"> Atrás</span></button>
+  <button type="button" class="btn btn-ghost" id="btnBack">
+    <span class="nav-arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="nav-label"> Atrás</span>
+  </button>
   <span class="price-peek" id="pricePeek"></span>
-  <button type="button" class="btn btn-primary" id="btnNext"><span class="nav-label">Continuar </span><span class="nav-arrow">→</span></button>
+  <button type="button" class="btn btn-primary" id="btnNext">
+    <span class="nav-label">Continuar </span>
+    <span class="nav-arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </button>
 </div>
 
 <script src="../header-footer.js"></script>

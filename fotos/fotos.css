@@ -52,22 +52,38 @@
 .color-row label{ min-width:5.2rem; color:var(--ink-60); font-weight:500; flex-shrink:0; }
 .color-row input[type="range"]{ flex-grow:1; accent-color:var(--ink); }
 
+/* Ícono de flecha del nav inferior (Atrás/Continuar) — SVG de línea fina,
+   válido tanto en el modo normal del wizard como en el editor full-size. */
+.wizard-nav .nav-arrow{ display:inline-flex; align-items:center; }
+.wizard-nav .nav-arrow svg{ width:16px; height:16px; display:block; }
+
 /* =========================================================
    MODO EDITOR — activo cuando body.is-photo-editor
    (el Paso 2 tiene fotos cargadas). El chrome del wizard entero cede
    lugar al editor: se oculta el header del sitio y el stepline, y el
-   shell pasa a ocupar el alto completo de la ventana gráfica.
+   editor pasa a ocupar el alto completo de la ventana gráfica.
+
+   Nota de estructura: .wizard-nav NO es hijo de .shell en el HTML, es
+   su hermano (ambos hijos directos de <body>). Por eso el contenedor
+   flex de 100dvh tiene que ser el propio <body> — si fuera .shell (que
+   ya ocupa el 100% del alto), .wizard-nav quedaría empujado fuera del
+   viewport y el overflow:hidden de más abajo lo recortaría por completo.
    ========================================================= */
-html.is-photo-editor, body.is-photo-editor{
-  height:100%;
+html.is-photo-editor{ height:100%; }
+body.is-photo-editor{
+  height:100vh;
+  height:100dvh; /* dvh evita el salto por la barra de direcciones del navegador mobile */
   overflow:hidden; /* el scroll, si hace falta, queda contenido dentro del editor, no de la página */
+  display:flex;
+  flex-direction:column;
 }
 body.is-photo-editor .site-header{ display:none; }
 body.is-photo-editor .shell{
   padding:0;
   max-width:none;
-  height:100vh;
-  height:100dvh; /* dvh evita el salto por la barra de direcciones del navegador mobile */
+  width:100%;
+  flex:1 1 auto;
+  min-height:0;
   display:flex;
   flex-direction:column;
 }
@@ -78,12 +94,13 @@ body.is-photo-editor .panel-head{ display:none; } /* el título "Subí y editá 
 body.is-photo-editor #dropzoneMore{ display:none; } /* el filmstrip ya tiene su propio botón "+" */
 body.is-photo-editor #loadedWrap{ flex:1; min-height:0; display:flex; flex-direction:column; }
 body.is-photo-editor .photo-editor{ flex:1; min-height:0; display:flex; flex-direction:column; }
-body.is-photo-editor .pe-stage{ flex:1; height:auto; min-height:0; }
+body.is-photo-editor .pe-stage{ flex:1; height:auto; min-height:0; max-height:none; }
 
-/* Nav inferior: en modo editor pasa a position:static (deja de ser fixed),
-   viviendo dentro del flex-column del .shell junto al resto — así ocupa
-   exactamente el ancho disponible sin ningún riesgo de desbordar el
-   viewport por el left:0/right:0 + padding que tenía como fixed. */
+/* Nav inferior: en modo editor pasa a position:static (deja de ser fixed) y
+   se convierte en el último ítem del flex-column de <body> — así queda
+   anclado justo debajo del editor, dentro del viewport, con ancho 100%
+   exacto (sin el left:0/right:0 + padding que usaba como fixed, que ya no
+   hace falta y que era la causa del desborde). */
 body.is-photo-editor .wizard-nav{
   position:static;
   width:100%;
@@ -92,7 +109,7 @@ body.is-photo-editor .wizard-nav{
   background:transparent;
   border-top:none;
   padding:.5rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px));
-  flex-shrink:0;
+  flex:0 0 auto;
 }
 body.is-photo-editor .wizard-nav .btn{
   padding:.5rem .65rem;
@@ -106,17 +123,17 @@ body.is-photo-editor .wizard-nav .price-peek .amt{
   border-radius:var(--r-sm);
 }
 
-/* Botones Atrás/Continuar en modo editor: tecla física (cuerpo blanco,
-   borde+sombra offset negros, base más oscura asomando abajo), como en
-   la referencia de teclado — en vez del pill-button ghost/primary normal. */
+/* Botones Atrás/Continuar en modo editor: tecla física (cuerpo claro, borde
+   negro, base oscura gruesa asomando abajo tipo keycap), como en la
+   referencia de teclado — en vez del pill-button ghost/primary normal. */
 body.is-photo-editor .wizard-nav #btnBack,
 body.is-photo-editor .wizard-nav #btnNext{
-  width:2.9rem; height:2.9rem;
+  width:3.1rem; height:3.1rem;
   padding:0;
-  border-radius: .7rem;
+  border-radius: 1rem;
   background:var(--card);
-  border: 1.5px solid var(--ink);
-  box-shadow: 0 3px 0 var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
   color:var(--ink);
   display:flex; align-items:center; justify-content:center;
   transform:none;
@@ -129,15 +146,15 @@ body.is-photo-editor .wizard-nav #btnNext:hover{
 body.is-photo-editor .wizard-nav #btnBack:active,
 body.is-photo-editor .wizard-nav #btnNext:active{
   box-shadow: 0 1px 0 var(--ink);
-  transform: translateY(2px);
+  transform: translateY(3px);
 }
 body.is-photo-editor .wizard-nav #btnBack:disabled,
 body.is-photo-editor .wizard-nav #btnNext:disabled{
   opacity:.35;
-  box-shadow: 0 3px 0 var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
   transform:none;
 }
-body.is-photo-editor .wizard-nav .nav-arrow{ font-size:1.25rem; line-height:1; }
+body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 
 /* ---------- barra de iconos superior (tipo WhatsApp) ---------- */
 .pe-toolbar{
@@ -184,18 +201,23 @@ body.is-photo-editor .wizard-nav .nav-arrow{ font-size:1.25rem; line-height:1; }
 .pe-stage .crop-container{ max-width:100%; max-height:100%; }
 
 .pe-nav-arrow{
-  position:absolute; top:50%; transform:translateY(-50%);
-  width:2.4rem; height:2.4rem;
-  border-radius:50%;
-  border:none;
-  background: rgba(19,18,17,.35);
-  color:#fff;
-  font-size:1.5rem;
-  line-height:1;
+  position:absolute; top:50%;
+  width:2.75rem; height:2.75rem;
+  border-radius: .9rem;
+  background:var(--card);
+  border: 2px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink), 0 3px 10px rgba(19,18,17,.25);
+  color:var(--ink);
   display:flex; align-items:center; justify-content:center;
   cursor:pointer;
+  transform:translateY(-50%);
 }
-.pe-nav-arrow:hover{ background: rgba(19,18,17,.55); }
+.pe-nav-arrow svg{ width:20px; height:20px; }
+.pe-nav-arrow:hover{ background:var(--yellow-pale); }
+.pe-nav-arrow:active{
+  box-shadow: 0 1px 0 var(--ink), 0 1px 4px rgba(19,18,17,.2);
+  transform: translateY(calc(-50% + 2px));
+}
 .pe-nav-arrow:disabled{ opacity:0; pointer-events:none; }
 .pe-nav-prev{ left:.6rem; }
 .pe-nav-next{ right:.6rem; }
