@@ -366,15 +366,29 @@ function addFiles(fileListObj) {
     // foto (incluida una que no se esté viendo) al confirmar el Paso 2.
     const imgOffscreen = new Image();
     imgOffscreen.src = thumbUrl;
-    files.set(id, {
+    const entry = {
       file: f, thumbUrl, imgOffscreen, naturalW: 0, naturalH: 0,
+      thumbSmallUrl: null, // se completa async abajo — el filmstrip usa thumbUrl como fallback mientras tanto
       settings: { copias: g.copias, tamano: g.tamano },
       editState: { ...estadoEdicionInicial(), byn: g.byn },
       // La subida a R2 ya no ocurre por edición — se sube una única vez cuando
       // el usuario confirma el Paso 2 tocando "Continuar" (ver subirTodasLasFotos()).
       r2Key: null, subiendo: false, errorSubida: null,
-    });
+    };
+    files.set(id, entry);
     newIds.push(id);
+
+    // El filmstrip no necesita la resolución completa — generamos una
+    // versión reducida una sola vez (no depende del recorte/filtros, que
+    // pueden cambiar después) para no forzar al navegador a decodificar y
+    // reescalar el original en cada miniatura visible.
+    imgOffscreen.addEventListener('load', () => {
+      generarThumbnailPequeno(imgOffscreen).then(url => {
+        if (!url || !files.has(id)) return;
+        entry.thumbSmallUrl = url;
+        if (peEls.filmstrip) renderFilmstrip();
+      });
+    }, { once: true });
   });
 
   if (accepted.length) {
@@ -385,6 +399,24 @@ function addFiles(fileListObj) {
     renderEditor();
   }
   updateNavState();
+}
+
+// Genera una versión reducida (máx. 160px en el lado más largo) de una
+// imagen ya cargada, para usar como miniatura del filmstrip sin decodificar
+// el archivo original a tamaño completo en cada una.
+function generarThumbnailPequeno(imgEl, maxDim = 160) {
+  return new Promise(resolve => {
+    const natW = imgEl.naturalWidth, natH = imgEl.naturalHeight;
+    if (!natW || !natH) return resolve(null);
+    const scale = Math.min(1, maxDim / Math.max(natW, natH));
+    const w = Math.max(1, Math.round(natW * scale));
+    const h = Math.max(1, Math.round(natH * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, w, h);
+    canvas.toBlob(blob => resolve(blob ? URL.createObjectURL(blob) : null), 'image/jpeg', 0.72);
+  });
 }
 
 // Exporta el recorte + ajustes actuales de una foto a un Blob JPEG. Usa el
@@ -663,9 +695,9 @@ function actualizarEstadoSubida(id) {
 // Refs de nodos que no cambian (se resuelven una sola vez).
 const peEls = {
   toolbar: null, img: null, container: null, movable: null,
-  arrowPrev: null, arrowNext: null, zoom: null,
-  tamano: null, copias: null, price: null, filmstrip: null,
-  adjustPanel: null, brightness: null, contrast: null, saturate: null,
+  zoom: null, tamano: null, copias: null, price: null, filmstrip: null,
+  adjustPanel: null, zoomPanel: null, tamanoPanel: null, copiasPanel: null,
+  brightness: null, contrast: null, saturate: null,
   bynBtn: null, removeBtn: null, stage: null,
 };
 function resolvePeEls() {
@@ -673,14 +705,15 @@ function resolvePeEls() {
   peEls.img = document.getElementById('peImg');
   peEls.container = document.getElementById('peCropContainer');
   peEls.movable = document.getElementById('peImageMovable');
-  peEls.arrowPrev = document.getElementById('peArrowPrev');
-  peEls.arrowNext = document.getElementById('peArrowNext');
   peEls.zoom = document.getElementById('peZoom');
   peEls.tamano = document.getElementById('peTamano');
   peEls.copias = document.getElementById('peCopias');
   peEls.price = document.getElementById('pePrice');
   peEls.filmstrip = document.getElementById('peFilmstrip');
   peEls.adjustPanel = document.getElementById('peAdjustPanel');
+  peEls.zoomPanel = document.getElementById('peZoomPanel');
+  peEls.tamanoPanel = document.getElementById('peTamanoPanel');
+  peEls.copiasPanel = document.getElementById('peCopiasPanel');
   peEls.brightness = document.getElementById('peBrightness');
   peEls.contrast = document.getElementById('peContrast');
   peEls.saturate = document.getElementById('peSaturate');
@@ -762,7 +795,7 @@ function renderFilmstrip() {
     let statusHtml = '';
     if (entry.subiendo) statusHtml = '<span class="pe-thumb-status is-pending">⟳</span>';
     else if (entry.errorSubida) statusHtml = '<span class="pe-thumb-status is-error">!</span>';
-    thumb.innerHTML = `<img src="${entry.thumbUrl}" alt="">${statusHtml}`;
+    thumb.innerHTML = `<img src="${entry.thumbSmallUrl || entry.thumbUrl}" alt="">${statusHtml}`;
     thumb.addEventListener('click', () => irAFoto(id));
     peEls.filmstrip.appendChild(thumb);
   });
@@ -781,16 +814,8 @@ function renderFilmstrip() {
 function irAFoto(id) {
   if (!files.has(id)) return;
   state.activePhotoId = id;
+  cerrarTodosLosDropdowns();
   renderEditor();
-}
-
-function irAFotoRelativa(delta) {
-  const ids = ordenFotos();
-  const idx = ids.indexOf(state.activePhotoId);
-  if (idx === -1) return;
-  const nextIdx = idx + delta;
-  if (nextIdx < 0 || nextIdx >= ids.length) return;
-  irAFoto(ids[nextIdx]);
 }
 
 // Punto de entrada: (re)dibuja todo el editor para la foto activa. Se llama
@@ -804,11 +829,6 @@ function renderEditor() {
   const pintar = () => { actualizarStage(); };
   if (peEls.img.complete && peEls.img.naturalWidth) pintar();
   peEls.img.onload = pintar;
-
-  const ids = ordenFotos();
-  const idx = ids.indexOf(state.activePhotoId);
-  peEls.arrowPrev.disabled = idx <= 0;
-  peEls.arrowNext.disabled = idx >= ids.length - 1;
 
   actualizarSpecsRow();
   renderFilmstrip();
@@ -856,18 +876,70 @@ function renderTamanoOptionsInto(selectEl, selectedCodigo) {
   window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', onUp);
 
+  // ---------- gestos táctiles: un dedo arrastra, dos dedos hacen zoom (pellizco) ----------
+  let isPinching = false, pinchStartDist = 0, pinchStartScale = 1;
+  function distanciaEntreDedos(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
   document.getElementById('peCropContainer').addEventListener('touchstart', e => {
-    if (e.touches.length === 1) onDown(e.touches[0].clientX, e.touches[0].clientY);
+    if (e.touches.length === 1) {
+      isPinching = false;
+      onDown(e.touches[0].clientX, e.touches[0].clientY);
+    } else if (e.touches.length === 2) {
+      isDown = false; // dos dedos: dejamos de considerar esto un arrastre de un dedo
+      const entry = activeEntry();
+      if (!entry) return;
+      isPinching = true;
+      pinchStartDist = distanciaEntreDedos(e.touches);
+      pinchStartScale = entry.editState.scale;
+    }
   }, { passive: false });
+
   window.addEventListener('touchmove', e => {
-    if (isDown && e.touches.length === 1) { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); }
+    if (isPinching && e.touches.length === 2) {
+      e.preventDefault();
+      const entry = activeEntry();
+      if (!entry || !pinchStartDist) return;
+      const distActual = distanciaEntreDedos(e.touches);
+      const factor = distActual / pinchStartDist;
+      const nuevaEscala = Math.max(1, Math.min(3, pinchStartScale * factor));
+      entry.editState.scale = nuevaEscala;
+      peEls.zoom.value = nuevaEscala;
+      actualizarStage();
+    } else if (isDown && e.touches.length === 1) {
+      e.preventDefault();
+      onMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
   }, { passive: false });
-  window.addEventListener('touchend', onUp);
+
+  window.addEventListener('touchend', e => {
+    if (isPinching && e.touches.length < 2) {
+      isPinching = false;
+      if (state.activePhotoId) marcarPendienteDeSubir(state.activePhotoId);
+    }
+    onUp();
+  });
 
   new ResizeObserver(() => actualizarStage()).observe(document.getElementById('peStage'));
 })();
 
 /* ---------- barra de iconos ---------- */
+// Los 4 paneles flotantes (ajustes, zoom, tamaño, copias) se abren de a
+// uno — abrir uno cierra cualquier otro que estuviera abierto.
+function togglePeDropdown(nombre) {
+  const panel = { adjust: peEls.adjustPanel, zoom: peEls.zoomPanel, tamano: peEls.tamanoPanel, copias: peEls.copiasPanel }[nombre];
+  if (!panel) return;
+  const yaAbierto = panel.classList.contains('is-open');
+  cerrarTodosLosDropdowns();
+  if (!yaAbierto) panel.classList.add('is-open');
+}
+function cerrarTodosLosDropdowns() {
+  [peEls.adjustPanel, peEls.zoomPanel, peEls.tamanoPanel, peEls.copiasPanel].forEach(p => p && p.classList.remove('is-open'));
+}
+
 document.getElementById('peToolbar').addEventListener('click', e => {
   const btn = e.target.closest('.pe-icon-btn');
   if (!btn) return;
@@ -889,16 +961,21 @@ document.getElementById('peToolbar').addEventListener('click', e => {
     peEls.bynBtn.classList.toggle('is-on', entry.editState.byn);
     actualizarStage();
     marcarPendienteDeSubir(state.activePhotoId);
-  } else if (action === 'adjust') {
-    peEls.adjustPanel.classList.toggle('is-open');
+  } else if (action === 'adjust' || action === 'zoom' || action === 'tamano' || action === 'copias') {
+    togglePeDropdown(action);
   }
 });
+
+// Tocar la foto (fuera de un arrastre) cierra cualquier panel abierto —
+// el usuario está claramente volviendo a mirar/editar el encuadre.
+document.getElementById('peCropContainer').addEventListener('pointerdown', () => cerrarTodosLosDropdowns());
 
 document.getElementById('peRemoveBtn').addEventListener('click', () => {
   const id = state.activePhotoId;
   const entry = files.get(id);
   if (!entry) return;
   if (entry.thumbUrl) URL.revokeObjectURL(entry.thumbUrl);
+  if (entry.thumbSmallUrl) URL.revokeObjectURL(entry.thumbSmallUrl);
   if (entry.r2Key) fetch('/api/archivos?key=' + encodeURIComponent(entry.r2Key), { method: 'DELETE' }).catch(() => {});
   files.delete(id);
 
@@ -908,6 +985,7 @@ document.getElementById('peRemoveBtn').addEventListener('click', () => {
   } else {
     const ids = ordenFotos();
     state.activePhotoId = ids[0];
+    cerrarTodosLosDropdowns();
     renderEditor();
   }
   updateNavState();
@@ -968,10 +1046,6 @@ document.getElementById('peCopias').addEventListener('input', e => {
   actualizarSpecsRow();
   updateNavState();
 });
-
-/* ---------- flechas de navegación entre fotos ---------- */
-document.getElementById('peArrowPrev').addEventListener('click', () => irAFotoRelativa(-1));
-document.getElementById('peArrowNext').addEventListener('click', () => irAFotoRelativa(1));
 
 /* Carga por dropzone + input "agregar más" */
 const dropzone = document.getElementById('dropzone');

@@ -164,10 +164,18 @@ body.is-photo-editor .wizard-nav #btnNext:disabled{
 }
 body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 
+/* En el editor de fotos, el botón Continuar muestra "OK" en vez de la
+   flecha — confirma la edición de esta foto/paso, no un simple "seguir". */
+.nav-ok{ display:none; font-weight:800; font-size:.8rem; letter-spacing:.02em; }
+body.is-photo-editor .wizard-nav #btnNext .nav-arrow{ display:none; }
+body.is-photo-editor .wizard-nav #btnNext .nav-ok{ display:inline-flex; }
+
 /* ---------- barra de iconos superior (tipo WhatsApp) ---------- */
 .pe-toolbar{
   display:flex; align-items:center; gap:.4rem;
   padding:.5rem .9rem;
+  overflow-x:auto; /* si no entran todos los iconos en una pantalla muy angosta, se desliza en vez de romper el layout */
+  flex-shrink:0;
 }
 .pe-icon-btn{
   width:2.3rem; height:2.3rem;
@@ -185,17 +193,36 @@ body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 .pe-icon-btn.pe-danger:hover{ background:var(--danger); color:#fff; }
 .pe-toolbar-spacer{ flex-grow:1; }
 
-/* ---------- panel de ajustes finos (brillo/contraste/saturación),
-   se despliega desde el ícono "adjust" de la barra ---------- */
-.pe-adjust-panel{
-  display:none;
-  flex-direction:column; gap:.5rem;
-  padding:.75rem 1.1rem 1rem;
-  background:var(--paper);
-  border-radius:var(--r-md);
-  margin:0 .9rem .6rem;
+/* Separador entre el grupo de encuadre/color (rotar, espejo, B/N, ajustes)
+   y el grupo de especificaciones del pedido (zoom, tamaño, copias) — mismo
+   recurso visual que un separador de menú, para que se lean como dos
+   familias de opciones distintas. */
+.pe-toolbar-sep{
+  width:1px; height:1.4rem;
+  background:var(--ink-15);
+  flex-shrink:0;
+  margin:0 .15rem;
 }
-.pe-adjust-panel.is-open{ display:flex; }
+
+/* ---------- paneles desplegables (ajustes, zoom, tamaño, copias) ----------
+   position:absolute DENTRO de .pe-stage: flotan por encima de la vista
+   previa de la foto en vez de empujarla hacia abajo — la foto nunca cambia
+   de tamaño al abrir un panel. Comparten la clase .pe-dropdown y se abren
+   de a uno (acordeón), identificados por [data-panel]. */
+.pe-dropdown{
+  display:none;
+  position:absolute;
+  top:.6rem; left:.6rem; right:.6rem;
+  z-index:5;
+  flex-direction:column; gap:.5rem;
+  padding:.75rem 1rem .85rem;
+  background:var(--card);
+  border:1.5px solid var(--ink);
+  border-radius:var(--r-md);
+  box-shadow: 0 4px 0 var(--ink);
+}
+.pe-dropdown.is-open{ display:flex; }
+.pe-dropdown .field{ margin:0; }
 
 /* ---------- stage: foto grande, ocupa el alto disponible ---------- */
 .pe-stage{
@@ -208,58 +235,49 @@ body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 }
 .pe-stage .crop-container{ max-width:100%; max-height:100%; }
 
-.pe-nav-arrow{
-  position:absolute; top:50%;
-  width:2.75rem; height:2.75rem;
-  border-radius: .9rem;
-  background:var(--card);
-  border: 2px solid var(--ink);
-  box-shadow: 0 3px 0 var(--ink), 0 3px 10px rgba(19,18,17,.25);
-  color:var(--ink);
-  display:flex; align-items:center; justify-content:center;
-  cursor:pointer;
-  transform:translateY(-50%);
-}
-.pe-nav-arrow svg{ width:20px; height:20px; }
-.pe-nav-arrow:hover{ background:var(--yellow-pale); }
-.pe-nav-arrow:active{
-  box-shadow: 0 1px 0 var(--ink), 0 1px 4px rgba(19,18,17,.2);
-  transform: translateY(calc(-50% + 2px));
-}
-.pe-nav-arrow:disabled{ opacity:0; pointer-events:none; }
-.pe-nav-prev{ left:.6rem; }
-.pe-nav-next{ right:.6rem; }
-
-/* ---------- zoom, debajo del stage ---------- */
+/* ---------- zoom (dentro de su dropdown) ---------- */
 .pe-zoom-row{
   display:flex; align-items:center; gap:.5rem;
-  padding:.4rem 1.1rem;
-  max-width:26rem; margin:0 auto;
 }
 
-/* ---------- tamaño / copias / precio de la foto actual ---------- */
-.pe-specs-row{
-  display:grid; grid-template-columns: 1fr 4.5rem auto;
-  gap:.6rem; align-items:end;
-  padding:.6rem 1.1rem;
-  max-width:30rem; margin:0 auto;
-}
-.pe-specs-row .field{ margin:0; }
-.pe-specs-row label{ font-size:.66rem; }
+/* ---------- precio de la foto activa, como badge flotando sobre la
+   esquina inferior derecha de la vista previa (no ocupa espacio propio,
+   deja toda la foto visible detrás) ---------- */
 .pe-price{
+  position:absolute;
+  right:.6rem; bottom:.6rem;
+  z-index:4;
   font-family:var(--font-mono);
   font-weight:700;
-  font-size:.95rem;
+  font-size:.85rem;
   color:var(--ink);
-  background:var(--yellow);
+  background: rgba(245,217,73,.55); /* var(--yellow) al ~50% de opacidad */
+  backdrop-filter: blur(3px); /* legibilidad sobre fotos con fondo claro */
   border-radius:var(--r-sm);
-  padding:.55rem .65rem;
+  padding:.4rem .6rem;
   white-space:nowrap;
-  align-self:end;
-  text-align:center;
+  pointer-events:none;
 }
 
 /* ---------- carrusel de miniaturas ---------- */
+.pe-filmstrip-wrap{
+  position:relative;
+  flex-shrink:0;
+}
+/* Difuminado en los extremos del carrusel — mask-image funde a transparente
+   los primeros/últimos ~28px, así se insinúa que hay más miniaturas para
+   deslizar sin depender de un color de fondo específico detrás. */
+.pe-filmstrip-wrap::before,
+.pe-filmstrip-wrap::after{
+  content:'';
+  position:absolute; top:0; bottom:0;
+  width:1.75rem;
+  z-index:2;
+  pointer-events:none;
+}
+.pe-filmstrip-wrap::before{ left:0; background:linear-gradient(90deg, var(--paper), transparent); }
+.pe-filmstrip-wrap::after{ right:0; background:linear-gradient(270deg, var(--paper), transparent); }
+
 .pe-filmstrip{
   display:flex; gap:.5rem;
   overflow-x:auto;
@@ -304,7 +322,6 @@ body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 
 @media (max-width:640px){
   .pe-stage{ height:44vh; min-height:260px; }
-  .pe-specs-row{ grid-template-columns: 1fr 3.6rem auto; }
 }
 
 /* =========================================================

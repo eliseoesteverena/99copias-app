@@ -70,7 +70,8 @@
       <!-- ---- Editor full-size, una foto a la vez (tipo WhatsApp) ---- -->
       <div class="photo-editor" id="photoEditor">
 
-        <!-- barra superior: iconos de encuadre/rotación/color, tipo barra de edición de WhatsApp -->
+        <!-- barra superior: iconos de encuadre/color a la izquierda, separador,
+             iconos de zoom/tamaño/copias, spacer, quitar foto a la derecha -->
         <div class="pe-toolbar" id="peToolbar">
           <button type="button" class="pe-icon-btn" data-action="rotate" title="Rotar marco 90°">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.6 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12V7h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -84,55 +85,68 @@
           <button type="button" class="pe-icon-btn" data-action="adjust" title="Brillo, contraste y saturación">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h9M4 12h16M4 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="currentColor"/><circle cx="19" cy="17" r="2" fill="currentColor"/></svg>
           </button>
+
+          <div class="pe-toolbar-sep"></div>
+
+          <button type="button" class="pe-icon-btn" data-action="zoom" title="Zoom">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.5 11h5M11 8.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" class="pe-icon-btn" data-action="tamano" title="Tamaño">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 6V4M16 6V4M8 20v-2M16 20v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" class="pe-icon-btn" data-action="copias" title="Copias">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 16V5.5A1.5 1.5 0 0 1 6 4h10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+
           <div class="pe-toolbar-spacer"></div>
           <button type="button" class="pe-icon-btn pe-danger" id="peRemoveBtn" title="Quitar esta foto">
             <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
 
-        <!-- panel desplegable de ajustes finos, oculto por default (ícono "adjust" de arriba) -->
-        <div class="pe-adjust-panel" id="peAdjustPanel">
-          <div class="color-row"><label>Brillo</label><input type="range" id="peBrightness" min="0.6" max="1.4" step="0.02"></div>
-          <div class="color-row"><label>Contraste</label><input type="range" id="peContrast" min="0.6" max="1.4" step="0.02"></div>
-          <div class="color-row"><label>Saturación</label><input type="range" id="peSaturate" min="0" max="2" step="0.1"></div>
-        </div>
-
-        <!-- foto grande, full-size del viewport -->
+        <!-- foto grande + paneles desplegables (absolute, flotan encima sin
+             empujar el alto de la vista previa) + precio de esta foto -->
         <div class="pe-stage" id="peStage">
           <div class="crop-container" id="peCropContainer">
             <div class="image-movable" id="peImageMovable"><img class="crop-source-img" id="peImg" src=""></div>
             <div class="crop-frame"></div>
           </div>
-          <button type="button" class="pe-nav-arrow pe-nav-prev" id="peArrowPrev" aria-label="Foto anterior">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button type="button" class="pe-nav-arrow pe-nav-next" id="peArrowNext" aria-label="Foto siguiente">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
 
-        <!-- zoom -->
-        <div class="pe-zoom-row">
-          <button type="button" class="btn-icon" data-action="zoom-out" title="Alejar">−</button>
-          <input type="range" class="zoom-slider" id="peZoom" min="1" max="3" step="0.01" value="1">
-          <button type="button" class="btn-icon" data-action="zoom-in" title="Acercar">+</button>
-        </div>
+          <div class="pe-dropdown" id="peAdjustPanel" data-panel="adjust">
+            <div class="color-row"><label>Brillo</label><input type="range" id="peBrightness" min="0.6" max="1.4" step="0.02"></div>
+            <div class="color-row"><label>Contraste</label><input type="range" id="peContrast" min="0.6" max="1.4" step="0.02"></div>
+            <div class="color-row"><label>Saturación</label><input type="range" id="peSaturate" min="0" max="2" step="0.1"></div>
+          </div>
 
-        <!-- tamaño + copias de la foto actual -->
-        <div class="pe-specs-row">
-          <div class="field">
-            <label>Tamaño</label>
-            <select class="select" id="peTamano"></select>
+          <div class="pe-dropdown" id="peZoomPanel" data-panel="zoom">
+            <div class="pe-zoom-row">
+              <button type="button" class="btn-icon" data-action="zoom-out" title="Alejar">−</button>
+              <input type="range" class="zoom-slider" id="peZoom" min="1" max="3" step="0.01" value="1">
+              <button type="button" class="btn-icon" data-action="zoom-in" title="Acercar">+</button>
+            </div>
           </div>
-          <div class="field">
-            <label>Copias</label>
-            <input class="input" type="number" min="1" id="peCopias">
+
+          <div class="pe-dropdown" id="peTamanoPanel" data-panel="tamano">
+            <div class="field">
+              <label>Tamaño</label>
+              <select class="select" id="peTamano"></select>
+            </div>
           </div>
+
+          <div class="pe-dropdown" id="peCopiasPanel" data-panel="copias">
+            <div class="field">
+              <label>Copias</label>
+              <input class="input" type="number" min="1" id="peCopias">
+            </div>
+          </div>
+
           <div class="pe-price" id="pePrice"></div>
         </div>
 
         <!-- carrusel de miniaturas -->
-        <div class="pe-filmstrip" id="peFilmstrip"></div>
+        <div class="pe-filmstrip-wrap">
+          <div class="pe-filmstrip" id="peFilmstrip"></div>
+        </div>
 
         <div id="rejectedAlertEditor" class="alert alert-error" style="display:none; margin-top:.75rem;"></div>
       </div>
@@ -265,6 +279,7 @@
   <button type="button" class="btn btn-primary" id="btnNext">
     <span class="nav-label">Continuar </span>
     <span class="nav-arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="nav-ok">OK</span>
   </button>
 </div>
 
