@@ -17,6 +17,7 @@ const state = {
   sesionSubida: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
   diasConTurno: null, // array de dia_semana (0-6) con turnos activos en la zona elegida, o null = sin filtrar
   activePhotoId: null, // id de la foto mostrada actualmente en el editor full-size del Paso 2
+  checkoutConfirmado: false, // true una vez que /api/trabajos + /api/checkout responden OK — oculta "Atrás" para siempre en esta sesión
 };
 
 let fileIdCounter = 0;
@@ -776,7 +777,9 @@ function actualizarStage() {
 function actualizarSpecsRow() {
   const entry = activeEntry();
   if (!entry) return;
-  peEls.tamano.value = entry.settings.tamano;
+  peEls.tamano.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('is-on', b.dataset.value === entry.settings.tamano);
+  });
   peEls.copias.value = entry.settings.copias;
   const calc = calcularFoto(entry);
   peEls.price.textContent = money(calc.total);
@@ -840,9 +843,9 @@ function renderEditor() {
   updateNavState();
 }
 
-function renderTamanoOptionsInto(selectEl, selectedCodigo) {
-  selectEl.innerHTML = state.productos.map(p =>
-    `<option value="${p.codigo}" ${p.codigo === selectedCodigo ? 'selected' : ''}>${labelTamano(p)}</option>`
+function renderTamanoOptionsInto(container, selectedCodigo) {
+  container.innerHTML = state.productos.map(p =>
+    `<button type="button" data-value="${p.codigo}" class="${p.codigo === selectedCodigo ? 'is-on' : ''}">${labelTamano(p)}</button>`
   ).join('');
 }
 
@@ -1037,10 +1040,12 @@ document.querySelector('.pe-zoom-row [data-action="zoom-out"]').addEventListener
 });
 
 /* ---------- tamaño / copias de la foto activa ---------- */
-document.getElementById('peTamano').addEventListener('change', e => {
+document.getElementById('peTamano').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
   const entry = activeEntry();
   if (!entry) return;
-  entry.settings.tamano = e.target.value;
+  entry.settings.tamano = btn.dataset.value;
   entry.editState.scale = 1; entry.editState.panFracX = 0; entry.editState.panFracY = 0;
   actualizarStage();
   actualizarSpecsRow();
@@ -1052,7 +1057,9 @@ document.getElementById('peApplyAllCheck').addEventListener('change', e => {
   peEls.applyAllRow.classList.toggle('is-checked', e.target.checked);
 });
 document.getElementById('peApplyAllConfirm').addEventListener('click', () => {
-  const tamano = peEls.tamano.value;
+  const activo = peEls.tamano.querySelector('button.is-on');
+  if (!activo) return;
+  const tamano = activo.dataset.value;
   files.forEach(entry => {
     entry.settings.tamano = tamano;
     // El encuadre depende de la relación de aspecto del tamaño — al cambiar
@@ -1075,6 +1082,16 @@ document.getElementById('peCopias').addEventListener('input', e => {
   actualizarSpecsRow();
   updateNavState();
 });
+
+function ajustarCopias(delta) {
+  const entry = activeEntry();
+  if (!entry) return;
+  entry.settings.copias = Math.max(1, entry.settings.copias + delta);
+  actualizarSpecsRow(); // refresca el valor mostrado en el input
+  updateNavState();
+}
+document.querySelector('.pe-stepper [data-action="copias-out"]').addEventListener('click', () => ajustarCopias(-1));
+document.querySelector('.pe-stepper [data-action="copias-in"]').addEventListener('click', () => ajustarCopias(1));
 
 /* Carga por dropzone + input "agregar más" */
 const dropzone = document.getElementById('dropzone');
@@ -1236,6 +1253,11 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     document.getElementById('payLaunch').style.display = 'block';
     btn.style.display = 'none';
 
+    // El pedido y el checkout ya existen del lado del servidor — volver
+    // "atrás" a editar pasos previos ya no tiene sentido en este punto.
+    state.checkoutConfirmado = true;
+    updateNavState();
+
     iniciarPollingPago(trabajo_id);
   } catch (err) {
     console.error(err);
@@ -1271,7 +1293,7 @@ function updateStepline() {
 }
 
 function updateNavState() {
-  document.getElementById('btnBack').style.visibility = state.step === 1 ? 'hidden' : 'visible';
+  document.getElementById('btnBack').style.visibility = (state.step === 1 || state.checkoutConfirmado) ? 'hidden' : 'visible';
   const btnNext = document.getElementById('btnNext');
   const isLast = state.step === 5;
   btnNext.style.display = isLast ? 'none' : 'inline-flex';
@@ -1398,6 +1420,25 @@ function iniciarPollingPago(trabajoId) {
 document.getElementById('btnNuevoPedido').addEventListener('click', () => {
   window.location.href = window.location.origin + window.location.pathname;
 });
+
+/* =========================================================
+   NAV — menú hamburguesa (mobile)
+   ========================================================= */
+(function initNavMenu() {
+  const burger = document.getElementById('burger');
+  const navLinks = document.getElementById('navLinks');
+  if (!burger || !navLinks) return;
+  burger.addEventListener('click', () => {
+    const open = navLinks.classList.toggle('open');
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  navLinks.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      navLinks.classList.remove('open');
+      burger.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
 
 /* =========================================================
    INIT

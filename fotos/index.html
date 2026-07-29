@@ -12,7 +12,25 @@
 </head>
 <body>
 
-<div id="site-header"></div>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="https://99copias.com.ar" class="logo" aria-label="99copias inicio">
+      <img src="../logo.svg" alt="99copias">
+    </a>
+    <nav class="nav-links" id="navLinks" aria-label="Principal">
+      <a href="https://99copias.com.ar/#como">Cómo funciona</a>
+      <a href="https://99copias.com.ar/#ventajas">Ventajas</a>
+      <a href="https://99copias.com.ar/#precios">Precios</a>
+      <a href="https://99copias.com.ar/#faq">Preguntas</a>
+    </nav>
+    <div class="nav-cta">
+      <a href="https://app.99copias.com.ar" class="btn btn-mustard" style="padding:10px 20px">Subir archivo</a>
+      <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
 
 <div class="shell">
 
@@ -137,21 +155,25 @@
           <div class="pe-dropdown" id="peTamanoPanel" data-panel="tamano">
             <div class="field">
               <label>Tamaño</label>
-              <select class="select" id="peTamano"></select>
+              <div class="segmented" id="peTamano" data-field="tamano"></div>
             </div>
             <div class="pe-apply-all" id="peApplyAllRow">
               <label for="peApplyAllCheck">
                 <input type="checkbox" id="peApplyAllCheck">
                 Aplicar a todas las fotos
               </label>
-              <button type="button" class="btn btn-primary btn-sm" id="peApplyAllConfirm">Confirmar</button>
+              <button type="button" class="btn" id="peApplyAllConfirm">Confirmar</button>
             </div>
           </div>
 
           <div class="pe-dropdown" id="peCopiasPanel" data-panel="copias">
             <div class="field">
               <label>Copias</label>
-              <input class="input" type="number" min="1" id="peCopias">
+              <div class="pe-stepper">
+                <button type="button" class="btn-icon" data-action="copias-out" title="Restar copia">−</button>
+                <input class="input" type="number" min="1" id="peCopias">
+                <button type="button" class="btn-icon" data-action="copias-in" title="Sumar copia">+</button>
+              </div>
             </div>
           </div>
 
@@ -298,16 +320,6 @@
   </button>
 </div>
 
-<script src="../header-footer.js"></script>
-<script>
-  renderHeader('#site-header', {
-    items: [
-      { label: 'Precios', href: 'https://99copias.com.ar/#precios' },
-      { label: 'Preguntas Frecuentes', href: 'https://99copias.com.ar/#faq' },
-    ],
-    cta: { label: 'Imprimir', href: '/', ocultarEnUrls: ['/'] },
-  });
-</script>
 <script src="app.js"></script>
 </body>
 </html>

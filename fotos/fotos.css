@@ -5,6 +5,45 @@
    carrusel de miniaturas abajo. Reemplaza el grid de tarjetas.
    ========================================================= */
 
+/* =========================================================
+   NAV — reemplaza el .site-header dinámico (renderHeader/header-footer.js)
+   por el header estático provisto, exclusivo de esta página. Se traducen
+   sus valores a las variables ya definidas en ../styles.css en vez de
+   redeclarar un :root propio — los tokens ya coinciden casi 1:1
+   (--mustard es el mismo hex que nuestro --yellow, --shadow/--radius del
+   nav ya son equivalentes a --shadow-sm/--r-md) para no arriesgar
+   divergencias entre ambos sistemas. Scoped a fotos.css a propósito: no se
+   toca ../styles.css, que también sirve al wizard de impresión.
+   ========================================================= */
+header.nav{ position:sticky; top:0; z-index:50; background:var(--paper); border-bottom:var(--line); }
+.nav-inner{ display:flex; align-items:center; justify-content:space-between; height:70px; }
+.logo{ display:flex; align-items:center; gap:10px; }
+.logo img{ height:42px; width:auto; }
+.nav-links{ display:flex; align-items:center; gap:28px; font-weight:500; font-size:.95rem; }
+.nav-links a{ color:var(--ink); text-decoration:none; }
+.nav-links a:hover{ text-decoration:underline; text-underline-offset:4px; }
+.nav-cta{ display:flex; align-items:center; gap:12px; }
+.burger{ display:none; background:none; border:var(--line); border-radius:var(--r-md); padding:8px 10px; cursor:pointer; }
+.burger span{ display:block; width:20px; height:2px; background:var(--ink); margin:4px 0; }
+.wrap{ width:100%; max-width:1160px; margin:0 auto; padding:0 24px; }
+.btn-mustard{ background:var(--yellow); color:var(--ink); }
+
+/* El .segmented compartido asume pocas opciones en una sola fila — el de
+   tamaño tiene 6, así que acá permitimos que se acomoden en 2 filas de 3
+   en pantallas angostas en vez de apretarse ilegibles en una sola línea. */
+#peTamano{ flex-wrap:wrap; }
+#peTamano button{ flex:1 1 30%; }
+
+@media (max-width:900px){
+  .nav-links{ display:none; }
+  .burger{ display:block; }
+  .nav-links.open{
+    display:flex; position:absolute; top:70px; left:0; right:0;
+    flex-direction:column; background:var(--paper); border-bottom:var(--line);
+    padding:20px 24px; gap:18px;
+  }
+}
+
 /* ---------- área de recorte (compartida: foto grande y miniaturas) ---------- */
 .crop-container{
   position:relative;
@@ -64,10 +103,15 @@
    editor pasa a ocupar el alto completo de la ventana gráfica.
 
    Nota de estructura: .wizard-nav NO es hijo de .shell en el HTML, es
-   su hermano (ambos hijos directos de <body>). Por eso el contenedor
-   flex de 100dvh tiene que ser el propio <body> — si fuera .shell (que
-   ya ocupa el 100% del alto), .wizard-nav quedaría empujado fuera del
-   viewport y el overflow:hidden de más abajo lo recortaría por completo.
+   su hermano (ambos hijos directos de <body>). Se mantiene siempre
+   position:fixed (mismo patrón que usa el resto del proyecto para este
+   mismo elemento) en vez de integrarlo al flex-column de <body> — atarlo
+   a un alto calculado en dvh resultó frágil en navegadores mobile reales
+   (la barra de direcciones que aparece/desaparece podía dejarlo debajo del
+   viewport visible, forzando scroll para verlo). position:fixed lo ancla
+   siempre al viewport real sin depender de ese cálculo. A cambio, el
+   editor reserva su propio padding-bottom para que el nav fijo no tape el
+   filmstrip — mismo mecanismo que usa .shell en el resto del wizard.
    ========================================================= */
 html.is-photo-editor{ height:100%; }
 body.is-photo-editor{
@@ -77,7 +121,7 @@ body.is-photo-editor{
   display:flex;
   flex-direction:column;
 }
-body.is-photo-editor .site-header{ display:none; }
+body.is-photo-editor header.nav{ display:none; }
 body.is-photo-editor .shell{
   padding:0;
   max-width:none;
@@ -101,23 +145,21 @@ body.is-photo-editor #dropzoneMore{ display:none; } /* el filmstrip ya tiene su 
 #loadedWrap{ display:none; }
 body.is-photo-editor #dzWrap{ display:none; }
 body.is-photo-editor #loadedWrap{ flex:1; min-height:0; display:flex; flex-direction:column; }
-body.is-photo-editor .photo-editor{ flex:1; min-height:0; display:flex; flex-direction:column; }
+body.is-photo-editor .photo-editor{
+  flex:1; min-height:0; display:flex; flex-direction:column;
+  /* espacio reservado para que el nav inferior fijo no tape el filmstrip */
+  padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+}
 body.is-photo-editor .pe-stage{ flex:1; height:auto; min-height:0; max-height:none; }
 
-/* Nav inferior: en modo editor pasa a position:static (deja de ser fixed) y
-   se convierte en el último ítem del flex-column de <body> — así queda
-   anclado justo debajo del editor, dentro del viewport, con ancho 100%
-   exacto (sin el left:0/right:0 + padding que usaba como fixed, que ya no
-   hace falta y que era la causa del desborde). */
+/* Nav inferior: se mantiene fixed (igual que en el resto del wizard) — solo
+   cambia su apariencia (fondo transparente, sin borde, botones compactos). */
 body.is-photo-editor .wizard-nav{
-  position:static;
-  width:100%;
-  max-width:100%;
-  box-sizing:border-box;
+  position:fixed; left:0; right:0; bottom:0;
   background:transparent;
   border-top:none;
   padding:.5rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px));
-  flex:0 0 auto;
+  z-index:20;
 }
 body.is-photo-editor .wizard-nav .btn{
   padding:.5rem .65rem;
@@ -252,8 +294,8 @@ body.is-photo-editor .wizard-nav #btnNext .nav-ok{ display:inline-flex; }
   cursor:pointer;
 }
 .pe-apply-all input[type="checkbox"]{ accent-color:var(--ink); width:1rem; height:1rem; }
-.pe-apply-all .btn{ display:none; margin-left:auto; }
-.pe-apply-all.is-checked .btn{ display:inline-flex; }
+.pe-apply-all .btn{ visibility:hidden; margin-left:auto; }
+.pe-apply-all.is-checked .btn{ visibility:visible; }
 
 /* ---------- stage: foto grande, ocupa el alto disponible ---------- */
 .pe-stage{
@@ -270,6 +312,12 @@ body.is-photo-editor .wizard-nav #btnNext .nav-ok{ display:inline-flex; }
 .pe-zoom-row{
   display:flex; align-items:center; gap:.5rem;
 }
+
+/* ---------- stepper de copias (−/input/+), mismo patrón que el zoom ---------- */
+.pe-stepper{
+  display:flex; align-items:center; gap:.5rem;
+}
+.pe-stepper .input{ text-align:center; flex:1 1 auto; min-width:0; }
 
 /* ---------- precio de la foto activa, como badge flotando sobre la
    esquina inferior derecha de la vista previa (no ocupa espacio propio,
