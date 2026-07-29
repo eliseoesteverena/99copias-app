@@ -70,7 +70,6 @@ header.nav{ position:sticky; top:0; z-index:50; background:var(--paper); border-
   content:'';
   position:absolute; inset:0;
   border: 1.5px dashed rgba(255,255,255,.85);
-  box-shadow: inset 0 0 0 9999px rgba(19,18,17,.18);
 }
 
 .btn-icon{
@@ -207,10 +206,12 @@ body.is-photo-editor .wizard-nav #btnNext:disabled{
 body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 
 /* En el editor de fotos, el botón Continuar muestra "OK" en vez de la
-   flecha — confirma la edición de esta foto/paso, no un simple "seguir". */
+   flecha — confirma la edición de esta foto/paso, no un simple "seguir".
+   La visibilidad de .nav-arrow/.nav-ok se controla directamente desde JS
+   (updateNavState(), vía style.display) y no acá — evita que ambos textos
+   queden visibles a la vez por cualquier desajuste de timing con la clase
+   is-photo-editor. Acá solo queda la tipografía del "OK". */
 .nav-ok{ display:none; font-weight:800; font-size:.8rem; letter-spacing:.02em; }
-body.is-photo-editor .wizard-nav #btnNext .nav-arrow{ display:none; }
-body.is-photo-editor .wizard-nav #btnNext .nav-ok{ display:inline-flex; }
 
 /* ---------- barra de iconos superior (tipo WhatsApp) ---------- */
 .pe-toolbar{
@@ -249,6 +250,9 @@ body.is-photo-editor .wizard-nav #btnNext .nav-ok{ display:inline-flex; }
 @media (min-width:1200px){
   .pe-icon-btn{ width:auto; height:auto; padding:.5rem .85rem .5rem .65rem; border-radius:999px; }
   .pe-icon-btn .pe-icon-label{ display:inline; }
+  /* En pantallas muy anchas, los controles no deben irse a los extremos —
+     se centra la barra con un ancho máximo, como el resto del contenido. */
+  .pe-toolbar{ max-width:70rem; margin:0 auto; width:100%; }
 }
 
 /* Separador entre el grupo de encuadre/color (rotar, espejo, B/N, ajustes)

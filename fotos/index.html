@@ -12,25 +12,8 @@
 </head>
 <body>
 
-<header class="nav">
-  <div class="wrap nav-inner">
-    <a href="https://99copias.com.ar" class="logo" aria-label="99copias inicio">
-      <img src="../logo.svg" alt="99copias">
-    </a>
-    <nav class="nav-links" id="navLinks" aria-label="Principal">
-      <a href="https://99copias.com.ar/#como">Cómo funciona</a>
-      <a href="https://99copias.com.ar/#ventajas">Ventajas</a>
-      <a href="https://99copias.com.ar/#precios">Precios</a>
-      <a href="https://99copias.com.ar/#faq">Preguntas</a>
-    </nav>
-    <div class="nav-cta">
-      <a href="https://app.99copias.com.ar" class="btn btn-mustard" style="padding:10px 20px">Subir archivo</a>
-      <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false">
-        <span></span><span></span><span></span>
-      </button>
-    </div>
-  </div>
-</header>
+<script src="../nav.js"></script>
+<script>renderNav();</script>
 
 <div class="shell">
 
@@ -124,6 +107,7 @@
           </button>
 
           <div class="pe-toolbar-spacer"></div>
+          <div class="pe-toolbar-sep"></div>
           <button type="button" class="pe-icon-btn pe-danger" id="peRemoveBtn" title="Quitar esta foto">
             <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span class="pe-icon-label">Quitar</span>
@@ -321,5 +305,8 @@
 </div>
 
 <script src="app.js"></script>
+
+<script src="../nav.js"></script>
+<script>renderNav();</script>
 </body>
 </html>

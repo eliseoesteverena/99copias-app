@@ -1299,6 +1299,16 @@ function updateNavState() {
   btnNext.style.display = isLast ? 'none' : 'inline-flex';
   btnNext.disabled = !stepValido(state.step);
 
+  // "OK" reemplaza a la flecha únicamente dentro del editor de fotos (Paso 2
+  // con fotos cargadas) — se controla acá explícitamente en vez de dejarlo
+  // solo en manos de la cascada CSS (body.is-photo-editor), para blindar
+  // contra cualquier desajuste de orden/timing con setModoEditorFotos().
+  const enEditorDeFotos = state.step === 2 && files.size > 0;
+  const navArrow = btnNext.querySelector('.nav-arrow');
+  const navOk = btnNext.querySelector('.nav-ok');
+  if (navArrow) navArrow.style.display = enEditorDeFotos ? 'none' : '';
+  if (navOk) navOk.style.display = enEditorDeFotos ? 'inline-flex' : 'none';
+
   const peek = document.getElementById('pricePeek');
   if (files.size > 0) {
     peek.innerHTML = '<span class="amt">' + money(calcularTotalPedido()) + '</span>';
@@ -1420,25 +1430,6 @@ function iniciarPollingPago(trabajoId) {
 document.getElementById('btnNuevoPedido').addEventListener('click', () => {
   window.location.href = window.location.origin + window.location.pathname;
 });
-
-/* =========================================================
-   NAV — menú hamburguesa (mobile)
-   ========================================================= */
-(function initNavMenu() {
-  const burger = document.getElementById('burger');
-  const navLinks = document.getElementById('navLinks');
-  if (!burger || !navLinks) return;
-  burger.addEventListener('click', () => {
-    const open = navLinks.classList.toggle('open');
-    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-  navLinks.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', () => {
-      navLinks.classList.remove('open');
-      burger.setAttribute('aria-expanded', 'false');
-    });
-  });
-})();
 
 /* =========================================================
    INIT
