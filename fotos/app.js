@@ -451,9 +451,25 @@ function exportarFotoBlob(id) {
     const srcY = (baseH * st.scale / 2 - frameH / 2 - panY) * scY;
     const srcW = frameW * scX, srcH = frameH * scY;
 
+    // Tope de resolución de exportación: 300 DPI cubre incluso el tamaño más
+    // grande del catálogo (20x25cm ≈ 2360x2950px), así que 3000px de lado
+    // mayor es un techo generoso. Sin esto, una foto de cámara de 48MP se
+    // exportaba y subía igual de "grande" que si fuera a imprimirse en un
+    // póster — pesando varios MB más de lo necesario y haciendo mucho más
+    // lento tanto el drawImage/filtro (que procesa por píxel de SALIDA, no
+    // de entrada) como la subida por red.
+    const MAX_EXPORT_DIM = 3000;
+    let outW = Math.max(1, Math.round(srcW));
+    let outH = Math.max(1, Math.round(srcH));
+    if (Math.max(outW, outH) > MAX_EXPORT_DIM) {
+      const factor = MAX_EXPORT_DIM / Math.max(outW, outH);
+      outW = Math.max(1, Math.round(outW * factor));
+      outH = Math.max(1, Math.round(outH * factor));
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(srcW));
-    canvas.height = Math.max(1, Math.round(srcH));
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext('2d');
     ctx.filter = construirFiltroCss(st);
 
@@ -461,6 +477,9 @@ function exportarFotoBlob(id) {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
+    // drawImage lee el recorte a resolución original (srcW/srcH) pero lo
+    // dibuja ya reducido al tamaño final (canvas.width/height) — el
+    // remuestreo queda a cargo del propio drawImage en un solo paso.
     ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
 
     canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
@@ -608,6 +627,12 @@ async function subirTodasLasFotos() {
   if (!pendientes.length) return true;
 
   abrirOverlay(pendientes.length);
+  // El export de cada foto (drawImage + filtro por canvas) es trabajo
+  // sincrónico que bloquea el hilo principal — sin este yield, el navegador
+  // nunca llega a pintar el fade-in del overlay antes de que arranque ese
+  // trabajo, y la pantalla se siente "colgada" un instante justo después de
+  // tocar Continuar. Un doble rAF espera a que el frame ya se haya pintado.
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   const ok = await subirConProgreso(pendientes);
 
   if (ok) {
@@ -1308,6 +1333,14 @@ function updateNavState() {
   const navOk = btnNext.querySelector('.nav-ok');
   if (navArrow) navArrow.style.display = enEditorDeFotos ? 'none' : '';
   if (navOk) navOk.style.display = enEditorDeFotos ? 'inline-flex' : 'none';
+
+  // Atrás/Continuar quedan solo con la flecha (sin texto) en el editor de
+  // fotos y también en los Pasos 3 y 4 — el resto de los pasos conserva el
+  // texto completo.
+  const soloFlecha = enEditorDeFotos || state.step === 3 || state.step === 4;
+  document.querySelectorAll('.wizard-nav .nav-label').forEach(el => {
+    el.style.display = soloFlecha ? 'none' : '';
+  });
 
   const peek = document.getElementById('pricePeek');
   if (files.size > 0) {
