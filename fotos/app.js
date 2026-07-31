@@ -1,3 +1,52 @@
+/* ---------------------------------------------------------
+   SHARE TARGET — recibir archivos compartidos desde el hub
+   --------------------------------------------------------- */
+const SHARE_CACHE = 'share-target-temp';
+
+async function loadSharedFilesIfAny() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('share-target') !== '1') return;
+  if (!('caches' in window)) return;
+  
+  const cache = await caches.open(SHARE_CACHE);
+  const indexRes = await cache.match('shared-files-index');
+  if (!indexRes) return;
+  
+  const shared = await indexRes.json();
+  const entries = shared.files || [];
+  const files = [];
+  
+  for (const item of entries) {
+    const res = await cache.match(item.key);
+    if (!res) continue;
+    const blob = await res.blob();
+    files.push(new File([blob], item.name, {
+      type: item.type,
+      lastModified: item.lastModified,
+    }));
+  }
+  
+  // Limpiamos el cache temporal una sola vez que ya los tenemos en memoria.
+  await caches.delete(SHARE_CACHE);
+  
+  if (files.length === 0) return;
+  
+  // Sacamos el query param de la URL para no volver a disparar esto si el
+  // usuario refresca la página.
+  const url = new URL(location.href);
+  url.searchParams.delete('share-target');
+  history.replaceState(null, '', url.toString());
+  
+  handleIncomingFiles(files);
+}
+
+function handleIncomingFiles(files) {
+  addFiles(files);
+}
+
+window.addEventListener('load', loadSharedFilesIfAny);
+
+
 /* =========================================================
    ESTADO GLOBAL
    ========================================================= */
