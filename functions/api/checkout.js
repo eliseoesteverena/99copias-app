@@ -1,8 +1,8 @@
 // NOTA: este endpoint necesita la variable de entorno MP_ACCESS_TOKEN cargada en
 // Cloudflare Pages (Settings > Environment variables). El webhook que confirma el pago
-// real está en functions/api/webhooks/mercadopago.js. Las back_urls vuelven al mismo
-// index.html con ?estado=aprobado|rechazado|pendiente, que se resuelve todo en el
-// propio wizard (ver panel-resultado en index.html / app.js).
+// real está en functions/api/webhooks/mercadopago.js. Las back_urls vuelven a la carpeta
+// de la categoría del propio trabajo (ver más abajo) con ?estado=aprobado|rechazado|pendiente,
+// que se resuelve todo en el propio wizard (ver panel-resultado en index.html / app.js).
 // Hasta que MP_ACCESS_TOKEN esté cargado, este endpoint responde con un error claro en vez de fallar en silencio.
 
 export async function onRequestPost({ request, env }) {
@@ -20,6 +20,16 @@ export async function onRequestPost({ request, env }) {
       }, { status: 501 });
     }
 
+    // Cada categoría vive en su propia carpeta, con el mismo nombre que su `codigo`
+    // (ej. categoría 'impresion-rapida' -> carpeta /impresion-rapida/). Resolviendo
+    // la carpeta acá, en vez de hardcodearla, esto sigue funcionando sin tocar código
+    // cada vez que se sume una categoría/wizard nueva.
+    let basePath = '/';
+    if (trabajo.categoria_id) {
+      const categoria = await db.prepare('SELECT codigo FROM categorias WHERE id = ?').bind(trabajo.categoria_id).first();
+      if (categoria && categoria.codigo) basePath = '/' + categoria.codigo + '/';
+    }
+
     const origin = new URL(request.url).origin;
     const preference = {
       items: [{
@@ -30,9 +40,9 @@ export async function onRequestPost({ request, env }) {
       }],
       external_reference: String(trabajo_id),
       back_urls: {
-        success: origin + '/?estado=aprobado&trabajo=' + trabajo_id,
-        failure: origin + '/?estado=rechazado&trabajo=' + trabajo_id,
-        pending: origin + '/?estado=pendiente&trabajo=' + trabajo_id,
+        success: origin + basePath + '?estado=aprobado&trabajo=' + trabajo_id,
+        failure: origin + basePath + '?estado=rechazado&trabajo=' + trabajo_id,
+        pending: origin + basePath + '?estado=pendiente&trabajo=' + trabajo_id,
       },
       auto_return: 'approved',
       notification_url: origin + '/api/webhooks/mercadopago',

@@ -3,237 +3,290 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pedido de impresión</title>
-<link rel="stylesheet" href="styles.css">
+<title>99copias — Impresión rápida y Fotos</title>
+<meta name="description" content="Subí tus archivos y elegí cómo querés imprimirlos: impresión rápida de documentos o revelado de fotos.">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#ffffff">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>
-  if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/nav.css">
+<style>
+  /* Estilos propios del hub — todo lo demás viene de styles.css */
+  .hub-shell{
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.25rem 4rem;
+    min-height: 100vh;
+    display:flex;
+    flex-direction:column;
   }
-</script>
+  .hub-mark{
+    display:flex; align-items:center; gap:.6rem;
+    margin-bottom: 3rem;
+  }
+  .hub-mark img{ height:4rem; width:4rem; object-fit:contain; }
+  .hub-mark span{
+    font-family: var(--font-mono);
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color: var(--ink-60);
+  }
+
+  .hub-head{ margin-bottom: 2.25rem; }
+  .hub-head .eyebrow{ margin-bottom:.6rem; }
+  .hub-head h1{
+    font-size: clamp(1.7rem, 5vw, 2.3rem);
+    line-height:1.15;
+    max-width: 22ch;
+  }
+  .hub-head p{
+    margin-top: .85rem;
+    color: var(--ink-60);
+    font-size: .92rem;
+    max-width: 34ch;
+  }
+
+  .hub-choices{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width:520px){
+    .hub-choices{ grid-template-columns: 1fr; }
+  }
+
+  .hub-choice{
+    display:flex; flex-direction:column; align-items:flex-start; gap:.75rem;
+    text-align:left;
+    text-decoration:none;
+    color: var(--ink);
+    background: var(--card);
+    border: var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow);
+    padding: 1.5rem 1.35rem;
+    cursor:pointer;
+    transition: transform .08s ease, box-shadow .08s ease;
+  }
+  .hub-choice:hover{ transform:translate(2px,2px); box-shadow: 2px 2px 0 var(--ink); }
+  .hub-choice .glyph{
+    width: 2.75rem; height: 2.75rem;
+    border: var(--line-soft);
+    border-radius: var(--r-md);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 1.35rem;
+    background: var(--paper);
+  }
+  .hub-choice .glyph.fotos{ background: var(--pink); }
+  .hub-choice .glyph.impresion{ background: var(--mint); }
+  .hub-choice h2{
+    font-size: 1.15rem;
+  }
+  .hub-choice .desc{
+    font-size: .8rem;
+    color: var(--ink-60);
+    line-height:1.4;
+  }
+  .hub-choice .go{
+    margin-top:.2rem;
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color: var(--ink);
+    display:flex; align-items:center; gap:.3rem;
+  }
+
+  /* --- Modo share-target: archivos recibidos --- */
+  .share-banner{
+    display:none;
+    margin-bottom: 1.75rem;
+  }
+  .share-banner.is-visible{ display:block; }
+  .share-files{
+    display:flex; flex-wrap:wrap; gap:.5rem;
+    margin-top: .9rem;
+  }
+  .share-file-chip{
+    display:flex; align-items:center; gap:.4rem;
+    border: var(--line-soft);
+    border-radius: var(--r-sm);
+    background: var(--paper);
+    padding: .35rem .6rem;
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    color: var(--ink-60);
+    max-width: 12rem;
+  }
+  .share-file-chip .fname{
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .share-hint{
+    margin-top:.85rem;
+    font-size:.78rem;
+    color: var(--ink-60);
+  }
+
+  .hub-choice[aria-disabled="true"]{
+    opacity:.5;
+    cursor:not-allowed;
+    pointer-events:none;
+  }
+  .disabled-note{
+    font-size:.7rem;
+    color: var(--danger);
+    margin-top:-.2rem;
+  }
+
+  .hub-foot{
+    margin-top: auto;
+    padding-top: 3rem;
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    color: var(--ink-40);
+  }
+</style>
 </head>
 <body>
 
-<div id="site-header"></div>
+<div class="hub-shell">
 
-<div class="shell">
+  <div class="hub-mark">
+    <img src="/logo.svg" alt="">
+  </div>
 
-  <nav class="stepline" id="stepline">
-    <div class="tick is-active" data-step="1"><span class="n">01</span><span class="lbl">Zona</span></div>
-    <div class="tick" data-step="2"><span class="n">02</span><span class="lbl">Archivos</span></div>
-    <div class="tick" data-step="3"><span class="n">03</span><span class="lbl">Turno</span></div>
-    <div class="tick" data-step="4"><span class="n">04</span><span class="lbl">Datos</span></div>
-    <div class="tick" data-step="5"><span class="n">05</span><span class="lbl">Pago</span></div>
-  </nav>
-
-  <!-- ================= PASO 1 · ZONA DE ENTREGA ================= -->
-  <section class="panel is-active" id="panel-1">
-    <div class="panel-head">
-      <h2>¿A qué zona entregamos?</h2>
-      <p class="sub">Elegí tu zona para mostrarte los turnos de entrega disponibles. La recordamos para tu próximo pedido.</p>
+  <!-- Se muestra solo si llegamos desde un share del sistema operativo -->
+  <div class="share-banner alert alert-info" id="shareBanner">
+    <div>
+      <strong id="shareCount">Recibimos tus archivos.</strong>
+      <div class="share-files" id="shareFileList"></div>
+      <p class="share-hint">Elegí a dónde los mandamos.</p>
     </div>
-    <div id="zoneAlert" class="alert alert-error" style="display:none;"></div>
-    <div class="zone-grid" id="zoneGrid">
-      <div class="empty">Cargando zonas…</div>
-    </div>
-    <div class="plate is-focused" id="wrapDireccion" style="display:none; margin-top:1.15rem;">
-      <div class="field">
-        <label for="direccionEntrega">Dirección de entrega</label>
-        <input class="input" id="direccionEntrega" placeholder="Calle, número, piso/depto, referencias">
-      </div>
-    </div>
-  </section>
+  </div>
 
-  <!-- ================= PASO 2 · ARCHIVOS ================= -->
-  <section class="panel" id="panel-2">
-    <div class="panel-head">
-      <h2>Cargá tus archivos</h2>
-      <p class="sub">Aceptamos PDF e imágenes. Configurá copias, rango de páginas y acabado para cada uno.</p>
-    </div>
+  <div class="hub-head">
+    <h1 id="headTitle">¿Qué vas imprimir hoy?</h1>
+    <p id="headSub">Elegí una opción para empezar tu pedido.</p>
+  </div>
 
-    <div class="alert alert-error" id="rejectedAlert" style="display:none;"></div>
+  <div class="hub-choices">
+    <a href="/impresion-rapida/" class="hub-choice" id="choiceImpresion" data-target="impresion-rapida">
+      <span class="glyph impresion">🖨️</span>
+      <h2>Impresión rápida</h2>
+      <p class="desc">Documentos, apuntes y PDFs. Blanco y negro o color, anillado o abrochado.</p>
+      <span class="go">Empezar →</span>
+    </a>
 
-    <div id="dzWrap">
-      <label class="dropzone" id="dropzone">
-        <input type="file" id="fileInput" multiple accept="application/pdf,image/*">
-        <span class="dz-title">Arrastrá y soltá tus archivos</span>
-        <span class="dz-or mono">ó</span>
-        <span class="btn btn-outline btn-sm">Seleccioná tus archivos</span>
-        <span class="dz-list">Se aceptan PDF e imágenes (JPG, PNG)</span>
-      </label>
-    </div>
+    <a href="/fotos/" class="hub-choice" id="choiceFotos" data-target="fotos">
+      <span class="glyph fotos">📷</span>
+      <h2>Fotos</h2>
+      <p class="desc">Revelado de fotos desde tus imágenes, en el tamaño que elijas.</p>
+      <span class="go">Empezar →</span>
+    </a>
+  </div>
 
-    <div id="loadedWrap" style="display:none;">
-      <details class="plate" id="detailsAjustesGlobales" style="margin-bottom:1rem;">
-        <summary class="eyebrow" style="cursor:pointer;">Ajustes para todos los archivos</summary>
-        <div class="form-grid" style="margin-top:1rem;">
-          <div class="field">
-            <label>Copias por archivo</label>
-            <input class="input" type="number" min="1" value="1" id="gCopias">
-          </div>
-          <div class="field">
-            <label>Tipo de impresión</label>
-            <div class="segmented accent" id="gPrimario"></div>
-          </div>
-          <div class="field">
-            <label>Acabado</label>
-            <div class="segmented accent" id="gAcabado">
-              <button type="button" data-value="abrochado">Abrochado</button>
-              <button type="button" data-value="anillado">Anillado</button>
-              <button type="button" data-value="clip">Clip</button>
-            </div>
-          </div>
-          <div class="field">
-            <label>Faz</label>
-            <div class="segmented" id="gFaz">
-              <button type="button" class="is-on" data-value="simple">Simple</button>
-              <button type="button" data-value="doble">Doble</button>
-            </div>
-          </div>
-          <div class="field">
-            <label>Páginas por carilla</label>
-            <div class="segmented" id="gPaginasPorCarilla">
-              <button type="button" class="is-on" data-value="1">1</button>
-              <button type="button" data-value="2">2</button>
-              <button type="button" data-value="4">4</button>
-              <button type="button" data-value="6">6</button>
-            </div>
-          </div>
-          <div class="field">
-            <label>&nbsp;</label>
-            <button type="button" class="btn btn-outline btn-sm" id="btnApplyAll">Aplicar a todos los archivos</button>
-          </div>
-        </div>
-      </details>
-
-      <label class="dropzone" id="dropzoneMore" style="padding:1.25rem; margin-bottom:1rem;">
-        <input type="file" id="fileInputMore" multiple accept="application/pdf,image/*">
-        <span class="dz-title" style="font-size:.9rem;">+ Agregar más archivos</span>
-      </label>
-
-      <div class="file-scroll" id="fileList"></div>
-    </div>
-  </section>
-
-  <!-- ================= PASO 3 · TURNO ================= -->
-  <section class="panel" id="panel-3">
-    <div class="panel-head">
-      <h2>Elegí día y horario de entrega</h2>
-      <p class="sub" id="turnoZonaLabel">Turnos disponibles para tu zona.</p>
-      <p class="sub">Elegí una fecha para ver los turnos.</p>
-    </div>
-    <div class="date-picker" id="datePicker"></div>
-    <div class="slot-grid" id="slotGrid"></div>
-  </section>
-
-  <!-- ================= PASO 4 · DATOS DEL CLIENTE ================= -->
-  <section class="panel" id="panel-4">
-    <div class="panel-head">
-      <h2>Datos personales</h2>
-      <p class="sub">Los necesitamos para emitir el comprobante y coordinar la entrega.</p>
-    </div>
-    <div class="plate">
-      <div class="form-grid">
-        <div class="field"><label for="cNombre">Nombre</label><input class="input" id="cNombre"></div>
-        <div class="field"><label for="cApellido">Apellido</label><input class="input" id="cApellido"></div>
-        <div class="field">
-          <label for="cDocTipo">Tipo de documento</label>
-          <select class="select" id="cDocTipo">
-            <option value="dni">DNI</option>
-            <option value="cuit">CUIT</option>
-          </select>
-        </div>
-        <div class="field"><label for="cDocNumero">Número de documento</label><input class="input" id="cDocNumero"></div>
-        <div class="field"><label for="cEmail">Correo electrónico</label><input class="input" type="email" id="cEmail"></div>
-        <div class="field"><label for="cCelular">Celular</label><input class="input" id="cCelular" placeholder="+54 9 ..."></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= PASO 5 · PAGO ================= -->
-  <section class="panel" id="panel-5">
-    <div class="panel-head">
-      <h2>Revisá y pagá</h2>
-      <p class="sub">Verificá el detalle de tu pedido antes de ir al checkout de Mercado Pago.</p>
-    </div>
-
-    <div class="receipt" id="finalReceipt">
-      <div class="receipt-head">
-        <h3>Resumen del pedido</h3>
-        <span class="id mono" id="finalCount">0 archivos</span>
-      </div>
-      <div id="finalBody"></div>
-      <div class="receipt-total">
-        <span class="label">Total a pagar</span>
-        <span class="amount" id="finalTotal">$0</span>
-      </div>
-    </div>
-
-    <div class="alert alert-error" id="payError" style="display:none;"></div>
-
-    <button type="button" class="btn btn-primary btn-block" id="btnPagar" style="margin-top:1rem; padding:.9rem;">
-      Ir a pagar con Mercado Pago →
-    </button>
-
-    <div class="eyebrow" style="text-align:center; margin-top:.75rem; display:flex; align-items:center; justify-content:center; gap:.4rem;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="5" y="11" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
-        <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
-      Pago seguro
-    </div>
-
-    <div id="payLaunch" style="display:none; margin-top:1.25rem;">
-      <div class="plate is-focused" style="text-align:center;">
-        <div class="eyebrow" style="margin-bottom:.9rem;">Checkout listo</div>
-        <div id="payQrBlock">
-          <p style="font-weight:600; margin-bottom:1rem;">Escaneá el código desde tu celular para pagar sin salir de esta pantalla</p>
-          <img id="payQr" src="" alt="Código QR para pagar con Mercado Pago" width="220" height="220" style="display:block; margin:0 auto;">
-          <p class="eyebrow" style="margin-top:1rem;">— o bien —</p>
-        </div>
-        <a id="payLink" class="btn btn-outline" href="#" style="margin-top:.5rem;">Continuar el pago en esta pestaña →</a>
-        <p class="eyebrow" style="margin-top:1.25rem;">Esta pantalla se actualiza sola apenas se acredite el pago — no hace falta que vuelvas ni recargues.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= RESULTADO DEL PAGO (vuelta desde Mercado Pago) ================= -->
-  <section class="panel" id="panel-resultado">
-    <div class="plate is-focused" id="resultadoPlate" style="text-align:center; padding:2.5rem 1.5rem;">
-      <svg id="resultadoDoodle" width="44" height="44" viewBox="0 0 44 44" fill="none" style="margin:0 auto .5rem;">
-        <path d="M22 2 L26 18 L42 22 L26 26 L22 42 L18 26 L2 22 L18 18 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-      </svg>
-      <div class="eyebrow" id="resultadoEyebrow">RESULTADO</div>
-      <h2 id="resultadoTitulo" style="margin-top:.75rem; font-size:1.4rem;"></h2>
-      <p id="resultadoTexto" style="color:var(--ink-60); margin-top:.6rem; max-width:28rem; margin-left:auto; margin-right:auto;"></p>
-      <p class="mono" id="resultadoTrabajo" style="margin-top:1rem; font-size:.78rem; color:var(--ink-40);"></p>
-      <button type="button" class="btn btn-primary" id="btnNuevoPedido" style="margin-top:1.5rem;">Hacer otro pedido</button>
-    </div>
-  </section>
-
+  <p class="hub-foot mono">99copias · impresión y fotos</p>
 
 </div>
 
-<!-- ================= NAV INFERIOR ================= -->
-<div class="wizard-nav">
-  <button type="button" class="btn btn-ghost" id="btnBack">← Atrás</button>
-  <span class="price-peek" id="pricePeek"></span>
-  <button type="button" class="btn btn-primary" id="btnNext">Continuar →</button>
-</div>
-
-<script src="header-footer.js"></script>
 <script>
-  renderHeader('#site-header', {
-    items: [
-      { label: 'Precios', href: 'https://99copias.com.ar/#precios' },
-      { label: 'Preguntas Frecuentes', href: 'https://99copias.com.ar/#faq' },
-    ],
-    cta: { label: 'Imprimir', href: '/', ocultarEnUrls: ['/'] },
+/* ---------------------------------------------------------
+   Modo share-target: si llegamos con ?from=share-target,
+   leemos lo que el Service Worker guardó en Cache API y
+   armamos el chooser. Si no, el hub queda como landing normal
+   (los <a href> de arriba ya funcionan solos).
+   --------------------------------------------------------- */
+const SHARE_CACHE = 'share-target-temp';
+
+async function initShareMode() {
+  const params = new URLSearchParams(location.search);
+
+  if (params.has('share-error')) {
+    document.getElementById('headTitle').textContent = 'No pudimos recibir ese archivo';
+    document.getElementById('headSub').textContent =
+      'Probá de nuevo desde la app que lo compartió, o subilo manualmente eligiendo una opción abajo.';
+    return;
+  }
+
+  if (params.get('from') !== 'share-target') return; // landing normal, no hacemos nada más
+  if (!('caches' in window)) return;
+
+  const cache = await caches.open(SHARE_CACHE);
+  const indexRes = await cache.match('shared-files-index');
+  if (!indexRes) return;
+
+  const shared = await indexRes.json();
+  const files = shared.files || [];
+  if (files.length === 0) return;
+
+  const soloImagenes = files.every((f) => (f.type || '').startsWith('image/'));
+
+  // Cabecera
+  document.getElementById('headEyebrow').textContent = 'Archivos compartidos';
+  document.getElementById('headTitle').textContent = '¿A dónde los mandamos?';
+  document.getElementById('headSub').textContent =
+    files.length === 1
+      ? 'Recibimos 1 archivo. Elegí el destino.'
+      : `Recibimos ${files.length} archivos. Elegí el destino.`;
+
+  // Banner con la lista de archivos
+  const banner = document.getElementById('shareBanner');
+  const list = document.getElementById('shareFileList');
+  document.getElementById('shareCount').textContent =
+    files.length === 1 ? 'Recibimos 1 archivo' : `Recibimos ${files.length} archivos`;
+  list.innerHTML = files
+    .map((f) => `<span class="share-file-chip"><span class="fname">${escapeHtml(f.name)}</span></span>`)
+    .join('');
+  banner.classList.add('is-visible');
+
+  // Impresión rápida acepta imágenes y PDF: siempre habilitada.
+  // Fotos solo acepta imágenes: si vino un PDF en el lote, la deshabilitamos
+  // acá mismo para no mandar al usuario a un error dentro del wizard.
+  const choiceFotos = document.getElementById('choiceFotos');
+  if (!soloImagenes) {
+    choiceFotos.setAttribute('aria-disabled', 'true');
+    choiceFotos.removeAttribute('href');
+    const desc = choiceFotos.querySelector('.desc');
+    const note = document.createElement('p');
+    note.className = 'disabled-note mono';
+    note.textContent = 'Hay un PDF en el lote — Fotos solo acepta imágenes.';
+    desc.insertAdjacentElement('afterend', note);
+  }
+
+  // Los dos links del chooser agregan el mismo query param para que cada
+  // wizard sepa que tiene que ir a buscar archivos al Cache API.
+  document.getElementById('choiceImpresion').href = '/impresion-rapida/?share-target=1';
+  if (soloImagenes) {
+    choiceFotos.href = '/fotos/?share-target=1';
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Registro del Service Worker — necesario para que /share-handler exista
+// como endpoint interceptable la próxima vez que alguien comparta.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Si falla el registro no rompemos el hub — el share target
+      // simplemente no va a estar disponible hasta que se pueda registrar.
+    });
   });
+}
+
+initShareMode();
 </script>
-<script src="app.js"></script>
+
+<script src="/nav.js"></script>
+<script>//renderNav();</script>
 </body>
 </html>
