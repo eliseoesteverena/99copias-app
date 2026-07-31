@@ -221,7 +221,9 @@ body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
   flex-shrink:0;
 }
 .pe-icon-btn{
-  width:2.3rem; height:2.3rem;
+ width: auto;
+/*  width:2.3rem;*/
+  height:2.3rem;
   border-radius:50%;
   border:none;
   background:transparent;
