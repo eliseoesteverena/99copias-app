@@ -205,41 +205,6 @@
    --------------------------------------------------------- */
 const SHARE_CACHE = 'share-target-temp';
 
-// DEBUG TEMPORAL — muestra en pantalla lo que el Service Worker logueó,
-// si existe. Corre siempre al cargar el hub, sin importar query params,
-// por si el problema es que ni el redirect llega a dispararse.
-async function showShareDebugIfAny() {
-  if (!('caches' in window)) return;
-  try {
-    const cache = await caches.open('share-target-temp');
-
-    // Dump de TODAS las keys presentes en este momento, para comparar
-    // contra lo que vea el wizard después.
-    const allKeys = await cache.keys();
-    const keysList = allKeys.map((k) => k.url.replace(location.origin, '')).join(', ');
-    const keysBox = document.createElement('div');
-    keysBox.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#003;color:#0ff;' +
-      'font-size:10px;padding:6px 10px;z-index:9998;font-family:monospace;';
-    keysBox.textContent = 'HUB @ ' + new Date().toLocaleTimeString() + ' — keys en cache: [' + (keysList || 'ninguna') + ']';
-    document.body.appendChild(keysBox);
-
-    const res = await cache.match('/share-target-debug');
-    if (!res) return;
-    const data = await res.json();
-    const box = document.createElement('pre');
-    box.style.cssText = 'position:fixed;inset:auto 0 0 0;max-height:60vh;overflow:auto;' +
-      'background:#111;color:#0f0;font-size:11px;line-height:1.5;padding:12px;' +
-      'z-index:9999;white-space:pre-wrap;margin:0;border-top:3px solid #0f0;';
-    box.textContent = '=== SW DEBUG LOG (' + new Date(data.ts).toLocaleTimeString() + ') ===\n' +
-      data.steps.join('\n');
-    document.body.appendChild(box);
-    await cache.delete('/share-target-debug');
-  } catch (e) {
-    console.error('no se pudo leer el debug log', e);
-  }
-}
-showShareDebugIfAny();
-
 async function initShareMode() {
   const params = new URLSearchParams(location.search);
 
