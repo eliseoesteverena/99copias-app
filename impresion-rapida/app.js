@@ -1083,7 +1083,7 @@ async function loadSharedFilesIfAny() {
     const allKeys = await cache.keys();
     steps.push('TODAS las keys en cache ahora: [' + allKeys.map(k => k.url.replace(location.origin, '')).join(', ') + ']');
     
-    const indexRes = await cache.match('shared-files-index');
+    const indexRes = await cache.match('/shared-files-index');
     steps.push('shared-files-index encontrado = ' + !!indexRes);
     
     if (!indexRes) {

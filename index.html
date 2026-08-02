@@ -223,7 +223,7 @@ async function showShareDebugIfAny() {
     keysBox.textContent = 'HUB @ ' + new Date().toLocaleTimeString() + ' — keys en cache: [' + (keysList || 'ninguna') + ']';
     document.body.appendChild(keysBox);
 
-    const res = await cache.match('share-target-debug');
+    const res = await cache.match('/share-target-debug');
     if (!res) return;
     const data = await res.json();
     const box = document.createElement('pre');
@@ -233,7 +233,7 @@ async function showShareDebugIfAny() {
     box.textContent = '=== SW DEBUG LOG (' + new Date(data.ts).toLocaleTimeString() + ') ===\n' +
       data.steps.join('\n');
     document.body.appendChild(box);
-    await cache.delete('share-target-debug');
+    await cache.delete('/share-target-debug');
   } catch (e) {
     console.error('no se pudo leer el debug log', e);
   }
@@ -254,7 +254,7 @@ async function initShareMode() {
   if (!('caches' in window)) return;
 
   const cache = await caches.open(SHARE_CACHE);
-  const indexRes = await cache.match('shared-files-index');
+  const indexRes = await cache.match('/shared-files-index');
   if (!indexRes) return;
 
   const shared = await indexRes.json();

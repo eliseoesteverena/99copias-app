@@ -27,7 +27,7 @@ async function logDebug(steps) {
   try {
     const cache = await caches.open(SHARE_CACHE);
     await cache.put(
-      'share-target-debug',
+      '/share-target-debug',
       new Response(JSON.stringify({ ts: Date.now(), steps }), {
         headers: { 'content-type': 'application/json' },
       })
@@ -81,7 +81,7 @@ async function handleShareTarget(request) {
 
     const index = await Promise.all(
       files.map(async (file, i) => {
-        const key = `file-${i}-${encodeURIComponent(file.name || 'archivo')}`;
+        const key = `/file-${i}-${encodeURIComponent(file.name || 'archivo')}`;
         await cache.put(key, new Response(file));
         return {
           key,
@@ -95,7 +95,7 @@ async function handleShareTarget(request) {
     steps.push(`${index.length} archivo(s) guardados en cache`);
 
     await cache.put(
-      'shared-files-index',
+      '/shared-files-index',
       new Response(JSON.stringify({ title, text, files: index }), {
         headers: { 'content-type': 'application/json' },
       })
