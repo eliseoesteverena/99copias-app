@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/styles.css">
 <style>
   /* Estilos propios del hub — todo lo demás viene de styles.css */
   .hub-shell{
@@ -28,7 +28,7 @@
     display:flex; align-items:center; gap:.6rem;
     margin-bottom: 3rem;
   }
-  .hub-mark img{ height:4rem; width:4rem; object-fit:contain; }
+  .hub-mark img{ height:2.25rem; width:2.25rem; object-fit:contain; }
   .hub-mark span{
     font-family: var(--font-mono);
     font-size:.72rem;
@@ -158,6 +158,7 @@
 
   <div class="hub-mark">
     <img src="/logo.svg" alt="">
+    <span>99copias</span>
   </div>
 
   <!-- Se muestra solo si llegamos desde un share del sistema operativo -->
@@ -170,7 +171,8 @@
   </div>
 
   <div class="hub-head">
-    <h1 id="headTitle">¿Qué vas imprimir hoy?</h1>
+    <p class="eyebrow" id="headEyebrow">99copias</p>
+    <h1 id="headTitle">¿Qué querés imprimir?</h1>
     <p id="headSub">Elegí una opción para empezar tu pedido.</p>
   </div>
 
@@ -202,6 +204,30 @@
    (los <a href> de arriba ya funcionan solos).
    --------------------------------------------------------- */
 const SHARE_CACHE = 'share-target-temp';
+
+// DEBUG TEMPORAL — muestra en pantalla lo que el Service Worker logueó,
+// si existe. Corre siempre al cargar el hub, sin importar query params,
+// por si el problema es que ni el redirect llega a dispararse.
+async function showShareDebugIfAny() {
+  if (!('caches' in window)) return;
+  try {
+    const cache = await caches.open('share-target-temp');
+    const res = await cache.match('share-target-debug');
+    if (!res) return;
+    const data = await res.json();
+    const box = document.createElement('pre');
+    box.style.cssText = 'position:fixed;inset:auto 0 0 0;max-height:60vh;overflow:auto;' +
+      'background:#111;color:#0f0;font-size:11px;line-height:1.5;padding:12px;' +
+      'z-index:9999;white-space:pre-wrap;margin:0;border-top:3px solid #0f0;';
+    box.textContent = '=== SW DEBUG LOG (' + new Date(data.ts).toLocaleTimeString() + ') ===\n' +
+      data.steps.join('\n');
+    document.body.appendChild(box);
+    await cache.delete('share-target-debug');
+  } catch (e) {
+    console.error('no se pudo leer el debug log', e);
+  }
+}
+showShareDebugIfAny();
 
 async function initShareMode() {
   const params = new URLSearchParams(location.search);
@@ -286,7 +312,5 @@ if ('serviceWorker' in navigator) {
 initShareMode();
 </script>
 
-<script src="/nav.js"></script>
-<script>//renderNav();</script>
 </body>
 </html>
