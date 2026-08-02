@@ -1483,6 +1483,18 @@ document.getElementById('btnNuevoPedido').addEventListener('click', () => {
    --------------------------------------------------------- */
 const SHARE_CACHE = 'share-target-temp';
 
+// addFiles() calcula el precio usando state.productos (cargado por
+// loadProductos() dentro de init(), en paralelo). Si se llama a addFiles
+// antes de que ese fetch termine, el precio sale $0 porque no hay catálogo
+// todavía. Esperamos acá a que esté listo, con un límite por las dudas de
+// que el fetch falle y nunca resuelva.
+async function esperarProductos(maxEsperaMs = 8000) {
+  const inicio = Date.now();
+  while (state.productos.length === 0 && Date.now() - inicio < maxEsperaMs) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
 async function loadSharedFilesIfAny() {
   const params = new URLSearchParams(location.search);
   if (params.get('share-target') !== '1') return;
@@ -1517,6 +1529,7 @@ async function loadSharedFilesIfAny() {
   url.searchParams.delete('share-target');
   history.replaceState(null, '', url.toString());
   
+  await esperarProductos();
   handleIncomingFiles(files);
 }
 
