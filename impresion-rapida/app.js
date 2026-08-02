@@ -1041,48 +1041,96 @@ document.getElementById('btnNuevoPedido').addEventListener('click', () => {
 
 /* ---------------------------------------------------------
    SHARE TARGET — recibir archivos compartidos desde el hub
+   (VERSIÓN CON DEBUG VISIBLE — sacar el bloque de debug una
+   vez confirmado que todo funciona)
    --------------------------------------------------------- */
 const SHARE_CACHE = 'share-target-temp';
 
-async function loadSharedFilesIfAny() {
-  const params = new URLSearchParams(location.search);
-  if (params.get('share-target') !== '1') return;
-  if (!('caches' in window)) return;
-  
-  const cache = await caches.open(SHARE_CACHE);
-  const indexRes = await cache.match('shared-files-index');
-  if (!indexRes) return;
-  
-  const shared = await indexRes.json();
-  const entries = shared.files || [];
-  const files = [];
-  
-  for (const item of entries) {
-    const res = await cache.match(item.key);
-    if (!res) continue;
-    const blob = await res.blob();
-    files.push(new File([blob], item.name, {
-      type: item.type,
-      lastModified: item.lastModified,
-    }));
-  }
-  
-  // Limpiamos el cache temporal una sola vez que ya los tenemos en memoria.
-  await caches.delete(SHARE_CACHE);
-  
-  if (files.length === 0) return;
-  
-  // Sacamos el query param de la URL para no volver a disparar esto si el
-  // usuario refresca la página.
-  const url = new URL(location.href);
-  url.searchParams.delete('share-target');
-  history.replaceState(null, '', url.toString());
-  
-  handleIncomingFiles(files);
+function showWizardDebug(steps) {
+  const box = document.createElement('pre');
+  box.style.cssText = 'position:fixed;inset:auto 0 0 0;max-height:60vh;overflow:auto;' +
+    'background:#111;color:#0f0;font-size:11px;line-height:1.5;padding:12px;' +
+    'z-index:9999;white-space:pre-wrap;margin:0;border-top:3px solid #0f0;';
+  box.textContent = '=== WIZARD DEBUG (' + new Date().toLocaleTimeString() + ') ===\n' + steps.join('\n');
+  document.body.appendChild(box);
 }
 
-function handleIncomingFiles(files) {
-  addFiles(files);
+async function loadSharedFilesIfAny() {
+  const steps = [];
+  try {
+    steps.push('loadSharedFilesIfAny: arrancó');
+    steps.push('URL actual: ' + location.href);
+    
+    const params = new URLSearchParams(location.search);
+    const flag = params.get('share-target');
+    steps.push('share-target param = ' + flag);
+    
+    if (flag !== '1') {
+      steps.push('ABORTA: no vino con ?share-target=1 (flujo normal, esperado)');
+      showWizardDebug(steps);
+      return;
+    }
+    
+    if (!('caches' in window)) {
+      steps.push('ABORTA: este navegador no tiene Cache API');
+      showWizardDebug(steps);
+      return;
+    }
+    
+    const cache = await caches.open(SHARE_CACHE);
+    steps.push('cache share-target-temp abierta');
+    
+    const indexRes = await cache.match('shared-files-index');
+    steps.push('shared-files-index encontrado = ' + !!indexRes);
+    
+    if (!indexRes) {
+      steps.push('ABORTA: no había shared-files-index en cache (¿ya se consumió antes?)');
+      showWizardDebug(steps);
+      return;
+    }
+    
+    const shared = await indexRes.json();
+    const entries = shared.files || [];
+    steps.push('entries en el índice: ' + entries.length);
+    
+    const files = [];
+    for (const item of entries) {
+      const res = await cache.match(item.key);
+      steps.push('  ' + item.key + ' -> match = ' + !!res);
+      if (!res) continue;
+      const blob = await res.blob();
+      files.push(new File([blob], item.name, {
+        type: item.type,
+        lastModified: item.lastModified,
+      }));
+    }
+    steps.push('archivos File reconstruidos: ' + files.length);
+    
+    await caches.delete(SHARE_CACHE);
+    steps.push('cache share-target-temp borrada');
+    
+    if (files.length === 0) {
+      steps.push('ABORTA: 0 archivos reconstruidos');
+      showWizardDebug(steps);
+      return;
+    }
+    
+    const url = new URL(location.href);
+    url.searchParams.delete('share-target');
+    history.replaceState(null, '', url.toString());
+    steps.push('query param limpiado de la URL');
+    
+    steps.push('typeof addFiles = ' + typeof addFiles);
+    steps.push('llamando addFiles(files)...');
+    addFiles(files);
+    steps.push('addFiles(files) devolvió sin tirar excepción');
+    
+    showWizardDebug(steps);
+  } catch (err) {
+    steps.push('ERROR ATRAPADO: ' + (err && err.message));
+    steps.push('stack: ' + (err && err.stack));
+    showWizardDebug(steps);
+  }
 }
 
 window.addEventListener('load', loadSharedFilesIfAny);
