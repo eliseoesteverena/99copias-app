@@ -212,6 +212,17 @@ async function showShareDebugIfAny() {
   if (!('caches' in window)) return;
   try {
     const cache = await caches.open('share-target-temp');
+
+    // Dump de TODAS las keys presentes en este momento, para comparar
+    // contra lo que vea el wizard después.
+    const allKeys = await cache.keys();
+    const keysList = allKeys.map((k) => k.url.replace(location.origin, '')).join(', ');
+    const keysBox = document.createElement('div');
+    keysBox.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#003;color:#0ff;' +
+      'font-size:10px;padding:6px 10px;z-index:9998;font-family:monospace;';
+    keysBox.textContent = 'HUB @ ' + new Date().toLocaleTimeString() + ' — keys en cache: [' + (keysList || 'ninguna') + ']';
+    document.body.appendChild(keysBox);
+
     const res = await cache.match('share-target-debug');
     if (!res) return;
     const data = await res.json();
