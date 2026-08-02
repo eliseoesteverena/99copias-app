@@ -1495,6 +1495,24 @@ async function esperarProductos(maxEsperaMs = 8000) {
   }
 }
 
+// addFiles() activa setModoEditorFotos(true) sin importar el paso actual —
+// con carga manual nunca pasa porque solo se puede agregar una foto estando
+// ya en el Paso 2. Acá las fotos pueden llegar con el usuario todavía en el
+// Paso 1 (eligiendo zona), así que las dejamos en espera y las soltamos
+// recién cuando efectivamente entra al Paso 2 — enganchando goToStep sin
+// tocar su implementación original.
+let pendingSharedFiles = null;
+
+const _goToStepOriginal = goToStep;
+goToStep = function (n) {
+  _goToStepOriginal(n);
+  if (n === 2 && pendingSharedFiles) {
+    const f = pendingSharedFiles;
+    pendingSharedFiles = null;
+    addFiles(f);
+  }
+};
+
 async function loadSharedFilesIfAny() {
   const params = new URLSearchParams(location.search);
   if (params.get('share-target') !== '1') return;
@@ -1530,7 +1548,15 @@ async function loadSharedFilesIfAny() {
   history.replaceState(null, '', url.toString());
   
   await esperarProductos();
-  handleIncomingFiles(files);
+
+  // Si por algún motivo ya estamos en el Paso 2 (poco probable en un
+  // arranque fresco, pero por las dudas), disparamos directo. Si no, queda
+  // en espera hasta que goToStep(2) lo suelte.
+  if (state.step === 2) {
+    handleIncomingFiles(files);
+  } else {
+    pendingSharedFiles = files;
+  }
 }
 
 function handleIncomingFiles(files) {
