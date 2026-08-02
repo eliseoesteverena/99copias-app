@@ -164,13 +164,8 @@ body.is-photo-editor .wizard-nav .btn{
   padding:.5rem .65rem;
   box-shadow:none;
 }
-body.is-photo-editor .wizard-nav .nav-label{ display:none; }
-body.is-photo-editor .wizard-nav .price-peek .amt{
-  color:#fff;
-  background:var(--ink);
-  padding:.15rem .55rem;
-  border-radius:var(--r-sm);
-}
+/* .nav-label (Atrás/Continuar) se controla desde JS (updateNavState()), no
+   acá — cubre tanto el modo editor como los Pasos 3/4, ver comentario ahí. */
 
 /* Botones Atrás/Continuar en modo editor: tecla física (cuerpo claro, borde
    negro, base oscura gruesa asomando abajo tipo keycap), como en la
@@ -217,19 +212,20 @@ body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 .pe-toolbar{
   display:flex; align-items:center; gap:.4rem;
   padding:.5rem .9rem;
-  overflow-x:auto; /* si no entran todos los iconos en una pantalla muy angosta, se desliza en vez de romper el layout */
+  overflow-x:auto; /* el nombre de cada control ya siempre está a la vista — si no entran todos en una pantalla angosta, se desliza */
+  -webkit-overflow-scrolling:touch;
   flex-shrink:0;
 }
 .pe-icon-btn{
- width: auto;
-/*  width:2.3rem;*/
   height:2.3rem;
-  border-radius:50%;
+  width:auto;
+  border-radius:999px;
   border:none;
   background:transparent;
   color:var(--ink-60);
   display:flex; align-items:center; justify-content:center;
   gap:.35rem;
+  padding:.5rem .85rem .5rem .65rem;
   cursor:pointer;
   flex-shrink:0;
 }
@@ -239,26 +235,20 @@ body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
 .pe-icon-btn.pe-danger:hover{ background:var(--danger); color:#fff; }
 .pe-toolbar-spacer{ flex-grow:1; }
 
-/* Etiqueta de texto junto al ícono — oculta por defecto (solo ícono, como
-   hasta ahora). Los 3 controles de "specs" (zoom/tamaño/copias) la muestran
-   antes, desde 640px, porque son pocos y hay lugar de sobra; el resto de
-   los controles (encuadre/color + quitar) esperan a 1200px, cuando ya
-   entran los 7 botones con texto sin amontonarse. */
-.pe-icon-label{ display:none; font-size:.72rem; font-weight:600; white-space:nowrap; }
-@media (min-width:640px){
-  .pe-icon-btn-specs{ width:auto; height:auto; padding:.5rem .85rem .5rem .65rem; border-radius:999px; }
-  .pe-icon-btn-specs .pe-icon-label{ display:inline; }
-}
+/* Nombre de cada control, siempre visible junto al ícono — no todos los
+   usuarios reconocen los íconos a simple vista. En vez de esconder el
+   texto en pantallas angostas, la barra completa se desliza horizontal
+   (overflow-x:auto arriba); así el texto nunca desaparece. */
+.pe-icon-label{ font-size:.72rem; font-weight:600; white-space:nowrap; }
+
 @media (min-width:1200px){
-  .pe-icon-btn{ width:auto; height:auto; padding:.5rem .85rem .5rem .65rem; border-radius:999px; }
-  .pe-icon-btn .pe-icon-label{ display:inline; }
   /* En pantallas muy anchas, los controles no deben irse a los extremos —
      se centra la barra con un ancho máximo, como el resto del contenido. */
-  .pe-toolbar{ max-width:70rem; margin:0 auto; width:100%; }
+  .pe-toolbar{ max-width:70rem; margin:0 auto; width:100%; overflow-x:visible; }
 }
 
-/* Separador entre el grupo de encuadre/color (rotar, espejo, B/N, ajustes)
-   y el grupo de especificaciones del pedido (zoom, tamaño, copias) — mismo
+/* Separador entre el grupo de especificaciones del pedido (zoom, tamaño,
+   copias) y el de encuadre/color (rotar, espejo, B/N, ajustes) — mismo
    recurso visual que un separador de menú, para que se lean como dos
    familias de opciones distintas. */
 .pe-toolbar-sep{
@@ -342,6 +332,42 @@ body.is-photo-editor .wizard-nav .nav-arrow svg{ width:22px; height:22px; }
   padding:.4rem .6rem;
   white-space:nowrap;
   pointer-events:none;
+}
+
+/* Recordatorio discreto de a qué tamaño se está encuadrando esta foto —
+   esquina opuesta al precio, mismo tratamiento de badge flotante pero en
+   tono neutro (no amarillo, no compite con el precio) y en dos líneas para
+   no ensancharse: "Recorte para" chico arriba, tamaño en negrita abajo. */
+.pe-crop-label{
+  position:absolute;
+  left:.6rem; bottom:.6rem;
+  z-index:4;
+  max-width:60%;
+  background: rgba(255,255,255,.62);
+  backdrop-filter: blur(3px);
+  border-radius:var(--r-sm);
+  padding:.32rem .55rem;
+  line-height:1.25;
+  pointer-events:none;
+}
+.pe-crop-label .lbl{
+  display:block;
+  font-family:var(--font-mono);
+  font-size:.58rem;
+  font-weight:500;
+  color:var(--ink-60);
+  text-transform:uppercase;
+  letter-spacing:.02em;
+}
+.pe-crop-label .val{
+  display:block;
+  font-family:var(--font-serif);
+  font-size:.78rem;
+  font-weight:700;
+  color:var(--ink);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 /* ---------- carrusel de miniaturas ---------- */

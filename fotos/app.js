@@ -722,7 +722,7 @@ function actualizarEstadoSubida(id) {
 // Refs de nodos que no cambian (se resuelven una sola vez).
 const peEls = {
   toolbar: null, img: null, container: null, movable: null,
-  zoom: null, tamano: null, copias: null, price: null, filmstrip: null,
+  zoom: null, tamano: null, copias: null, price: null, cropLabelVal: null, filmstrip: null,
   adjustPanel: null, zoomPanel: null, tamanoPanel: null, copiasPanel: null,
   brightness: null, contrast: null, saturate: null,
   bynBtn: null, removeBtn: null, stage: null,
@@ -737,6 +737,7 @@ function resolvePeEls() {
   peEls.tamano = document.getElementById('peTamano');
   peEls.copias = document.getElementById('peCopias');
   peEls.price = document.getElementById('pePrice');
+  peEls.cropLabelVal = document.getElementById('peCropLabelVal');
   peEls.filmstrip = document.getElementById('peFilmstrip');
   peEls.adjustPanel = document.getElementById('peAdjustPanel');
   peEls.zoomPanel = document.getElementById('peZoomPanel');
@@ -809,6 +810,8 @@ function actualizarSpecsRow() {
   peEls.copias.value = entry.settings.copias;
   const calc = calcularFoto(entry);
   peEls.price.textContent = money(calc.total);
+  const producto = productoPorCodigo(entry.settings.tamano);
+  peEls.cropLabelVal.textContent = producto ? labelTamano(producto) : entry.settings.tamano;
   peEls.zoom.value = entry.editState.scale;
   peEls.brightness.value = entry.editState.brightness;
   peEls.contrast.value = entry.editState.contrast;

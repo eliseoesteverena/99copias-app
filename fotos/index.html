@@ -74,6 +74,21 @@
         <!-- barra superior: iconos de encuadre/color a la izquierda, separador,
              iconos de zoom/tamaño/copias, spacer, quitar foto a la derecha -->
         <div class="pe-toolbar" id="peToolbar">
+          <button type="button" class="pe-icon-btn" data-action="zoom" title="Zoom">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.5 11h5M11 8.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span class="pe-icon-label">Zoom</span>
+          </button>
+          <button type="button" class="pe-icon-btn" data-action="tamano" title="Tamaño">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 6V4M16 6V4M8 20v-2M16 20v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span class="pe-icon-label">Tamaño</span>
+          </button>
+          <button type="button" class="pe-icon-btn" data-action="copias" title="Copias">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 16V5.5A1.5 1.5 0 0 1 6 4h10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span class="pe-icon-label">Copias</span>
+          </button>
+
+          <div class="pe-toolbar-sep"></div>
+
           <button type="button" class="pe-icon-btn" data-action="rotate" title="Rotar marco 90°">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.6 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12V7h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span class="pe-icon-label">Rotar</span>
@@ -89,21 +104,6 @@
           <button type="button" class="pe-icon-btn" data-action="adjust" title="Brillo, contraste y saturación">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h9M4 12h16M4 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="currentColor"/><circle cx="19" cy="17" r="2" fill="currentColor"/></svg>
             <span class="pe-icon-label">Ajustes</span>
-          </button>
-
-          <div class="pe-toolbar-sep"></div>
-
-          <button type="button" class="pe-icon-btn pe-icon-btn-specs" data-action="zoom" title="Zoom">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.5 11h5M11 8.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <span class="pe-icon-label">Zoom</span>
-          </button>
-          <button type="button" class="pe-icon-btn pe-icon-btn-specs" data-action="tamano" title="Tamaño">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 6V4M16 6V4M8 20v-2M16 20v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <span class="pe-icon-label">Tamaño</span>
-          </button>
-          <button type="button" class="pe-icon-btn pe-icon-btn-specs" data-action="copias" title="Copias">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 16V5.5A1.5 1.5 0 0 1 6 4h10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <span class="pe-icon-label">Copias</span>
           </button>
 
           <div class="pe-toolbar-spacer"></div>
@@ -159,6 +159,11 @@
                 <button type="button" class="btn-icon" data-action="copias-in" title="Sumar copia">+</button>
               </div>
             </div>
+          </div>
+
+          <div class="pe-crop-label" id="peCropLabel">
+            <span class="lbl">Recorte para</span>
+            <span class="val" id="peCropLabelVal"></span>
           </div>
 
           <div class="pe-price" id="pePrice"></div>
