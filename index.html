@@ -33,12 +33,12 @@
     font-family: var(--font-mono);
     font-size:.72rem;
     letter-spacing:.14em;
-    text-transform:uppercase;
+    
     color: var(--ink-60);
   }
 
   .hub-head{ margin-bottom: 2.25rem; }
-  .hub-head .eyebrow{ margin-bottom:.6rem; }
+  .hub-head .eyebrow{ margin-bottom:.6rem;text-transform: lowercase;}
   .hub-head h1{
     font-size: clamp(1.7rem, 5vw, 2.3rem);
     line-height:1.15;
@@ -97,7 +97,7 @@
     font-family: var(--font-mono);
     font-size: .68rem;
     letter-spacing:.08em;
-    text-transform:uppercase;
+    
     color: var(--ink);
     display:flex; align-items:center; gap:.3rem;
   }
@@ -149,6 +149,11 @@
     font-family: var(--font-mono);
     font-size: .68rem;
     color: var(--ink-40);
+  }
+  div.hub-foot.politicas {
+    padding-top:1rem;
+    display:flex;
+    flex-direction:column;
   }
 </style>
 <script type="application/ld+json">
@@ -335,9 +340,9 @@
   </div>
 
   <div class="hub-head">
-    <p class="eyebrow" id="headEyebrow">99copias</p>
+    <p class="eyebrow" id="headEyebrow"></p>
     <h1 id="headTitle">¿Qué querés imprimir?</h1>
-    <p id="headSub">Elegí una opción para empezar tu pedido.</p>
+    <p id="headSub">Iniciá sesión para gestionar tus pedidos de impresión, subir tus archivos y hacer el seguimiento de tu entrega a domicilio.</p>
   </div>
 
   <div class="hub-choices">
@@ -356,7 +361,12 @@
     </a>
   </div>
 
-  <p class="hub-foot mono">99copias · impresión y fotos</p>
+  <p class="hub-foot mono">99copias</p>
+  <div class="hub-foot mono politicas">
+  <a href="https://99copias.com.ar/proteccion-de-datos.html" target="_blank">Protección de datos</a>
+  <a href="https://99copias.com.ar/terminos-y-condiciones.html" target="_blank">Términos y Condiciones</a>
+  
+<a href="https://99copias.com.ar/politicas-de-privacidad.html"  target="_blank">Politica de Privacidad</a></div>
 
 </div>
 
