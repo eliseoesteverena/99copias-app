@@ -16,6 +16,11 @@
 <link rel="stylesheet" href="/styles.css">
 <style>
   /* Estilos propios del hub — todo lo demás viene de styles.css */
+  header {
+    display:flex;
+    max-width: 50rem;
+    justify-content: space-between;
+  }
   .hub-shell{
     max-width: 40rem;
     margin: 0 auto;
@@ -324,11 +329,17 @@
 <body>
 
 <div class="hub-shell">
-
+<header>
   <div class="hub-mark">
     <img src="/logo.svg" alt="">
     <span>99copias</span>
   </div>
+  <div class="login-container">
+    <button class="btn btn-sm">Iniciar Sesión</button>
+  </div>
+  
+  
+</header>
 
   <!-- Se muestra solo si llegamos desde un share del sistema operativo -->
   <div class="share-banner alert alert-info" id="shareBanner">
@@ -342,7 +353,7 @@
   <div class="hub-head">
     <p class="eyebrow" id="headEyebrow"></p>
     <h1 id="headTitle">¿Qué querés imprimir?</h1>
-    <p id="headSub">Iniciá sesión con tu cuenta de Google para gestionar tus pedidos de impresión, subir tus archivos y hacer el seguimiento de tu entrega a domicilio.</p>
+    <p id="headSub">Podés hacer tu pedido sin registrarte. O bien, iniciá sesión para guardar tu historial de impresiones, evitar cargar tu dirección de entrega en cada pedido y hacer un seguimiento avanzado.</p>
   </div>
 
   <div class="hub-choices">
