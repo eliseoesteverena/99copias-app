@@ -1,0 +1,54 @@
+/* auth-client.css — estilos del modal de login/registro y del chip de
+   cuenta montados por auth-client.js. Reutiliza las custom properties ya
+   definidas en styles.css (--paper, --ink, --line, --r-md, --yellow) para
+   no introducir una paleta paralela; sólo agrega layout nuevo (prefijo au-)
+   que no existía en el proyecto. */
+
+.au-modal {
+  border: none;
+  border-radius: var(--r-lg, 16px);
+  padding: 28px;
+  width: min(380px, 92vw);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .18);
+}
+.au-modal::backdrop {
+  background: rgba(20, 18, 14, .45);
+}
+.au-modal-close-form { display: flex; justify-content: flex-end; margin: -8px -8px 4px 0; }
+.au-modal-close { font-size: 1rem; padding: 4px 8px; }
+
+.au-modal-tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: var(--line); }
+.au-tab {
+  flex: 1; background: none; border: none; padding: 10px 4px; cursor: pointer;
+  font-weight: 600; font-size: .9rem; color: var(--ink-60, #8a8378);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.au-tab.is-active { color: var(--ink); border-bottom-color: var(--yellow); }
+
+.au-modal-body { display: flex; flex-direction: column; gap: 14px; }
+.au-divider { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--ink-60, #8a8378); }
+.au-divider::before, .au-divider::after { content: ''; flex: 1; height: 1px; background: var(--line-color, #e6e1d8); }
+
+.au-form { display: flex; flex-direction: column; gap: 12px; }
+.au-error { font-size: .85rem; }
+
+/* Chip de cuenta en el header */
+.au-account { position: relative; }
+.au-account-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  background: var(--paper); border: var(--line); border-radius: var(--r-md);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .12);
+  min-width: 160px; padding: 6px;
+}
+.au-account-menu-item {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  padding: 10px 12px; border-radius: var(--r-md); cursor: pointer; font-size: .9rem; color: var(--ink);
+}
+.au-account-menu-item:hover { background: rgba(0, 0, 0, .05); }
+
+@media (max-width: 900px) {
+  /* Mismo criterio mobile-first que el resto del rediseño (sección 5 del
+     handoff de auth): el chip de cuenta no debe competir con el burger en
+     una barra angosta. */
+  .au-account-btn { padding: 8px 12px; font-size: .85rem; }
+}

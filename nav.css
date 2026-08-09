@@ -6,6 +6,7 @@ header.nav{ position:sticky; top:0; z-index:50; background:var(--paper); border-
 .nav-links a{ color:var(--ink); text-decoration:none; }
 .nav-links a:hover{ text-decoration:underline; text-underline-offset:4px; }
 .nav-cta{ display:flex; align-items:center; gap:12px; }
+.nav-account{ display:flex; align-items:center; }
 .burger{ display:none; background:none; border:var(--line); border-radius:var(--r-md); padding:8px 10px; cursor:pointer; }
 .burger span{ display:block; width:20px; height:2px; background:var(--ink); margin:4px 0; }
 .wrap{ width:100%; max-width:1160px; margin:0 auto; padding:0 24px; }

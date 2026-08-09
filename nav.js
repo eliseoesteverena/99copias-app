@@ -5,9 +5,14 @@
 // un link, o cambiar el CTA, alcanza con tocar este único archivo.
 //
 // Requiere el CSS de .nav/.nav-inner/.logo/.nav-links/.nav-cta/.burger/.wrap
-// (ya definido en fotos.css) cargado en la página que lo use.
+// (ya definido en fotos.css) cargado en la página que lo use, más
+// auth-client.css/.js si se quiere el control de cuenta (login/logout) —
+// ver DEC-G, HANDOFF_AUTENTICACION_Y_FLUJO.md: los dos wizards comparten
+// login, así que el control vive acá (nav.js), no en el hub, que tiene su
+// propio header aparte y no llama a renderNav().
 //
 // Uso básico (usa toda la configuración por default):
+//   <script src="../auth-client.js"></script>
 //   <script src="../nav.js"></script>
 //   <script>renderNav();</script>
 //
@@ -52,6 +57,7 @@ function renderNav(opts) {
         <nav class="nav-links" id="navLinks" aria-label="Principal">${linksHtml}</nav>
         <div class="nav-cta">
           ${ctaHtml}
+          <div class="nav-account" data-auth-mount></div>
           <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false">
             <span></span><span></span><span></span>
           </button>
@@ -78,4 +84,14 @@ function renderNav(opts) {
       burger.setAttribute('aria-expanded', 'false');
     });
   });
+
+  // Control de cuenta (login/logout) — si auth-client.js está cargado antes
+  // que nav.js, lo montamos ya mismo en vez de esperar al DOMContentLoaded
+  // propio de auth-client.js (que puede haber corrido antes de que este
+  // header existiera en el DOM, si renderNav() se llama de forma diferida
+  // en algún caso futuro).
+  const navAccount = document.querySelector('.nav-account');
+  if (navAccount && window.AuthClient && window.AuthUI) {
+    window.AuthClient.getSession().then(sesion => window.AuthUI.mount(navAccount, sesion));
+  }
 }
