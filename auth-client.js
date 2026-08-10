@@ -19,11 +19,21 @@
   const BASE = '/api/auth';
 
   async function req(path, opts) {
-    const res = await fetch(BASE + path, {
+    const config = {
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
       ...opts,
-    });
+    };
+    // Better Auth intenta parsear el body como JSON en cualquier request que
+    // no sea GET, incluso en endpoints que no esperan ningún campo
+    // (sign-in/anonymous, sign-out). Si mandamos el header content-type:
+    // application/json sin body, el fetch manda un body vacío y el parseo
+    // falla con 400 "Invalid JSON in request body". Por eso: si es un
+    // método con body y no se pasó ninguno, mandamos '{}' explícito.
+    if (config.method && config.method !== 'GET' && config.body === undefined) {
+      config.body = '{}';
+    }
+    const res = await fetch(BASE + path, config);
     let data = null;
     try { data = await res.json(); } catch { /* respuestas sin body, ej. sign-out */ }
     if (!res.ok) {
