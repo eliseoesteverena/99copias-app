@@ -4,6 +4,16 @@
    no introducir una paleta paralela; sólo agrega layout nuevo (prefijo au-)
    que no existía en el proyecto. */
 
+/* Bug real encontrado: varias clases del proyecto (.field, .au-form, y
+   estilos inline con display:flex) le ganan al atributo [hidden] en la
+   cascada — [hidden] sólo aplica display:none desde la hoja de estilos del
+   navegador (prioridad más baja), así que cualquier regla de autor con
+   display explícito lo pisa, aunque el elemento siga "hidden". Esta regla
+   fuerza que [hidden] SIEMPRE gane, sin importar qué otra clase tenga el
+   elemento — se carga en las tres páginas (hub + los dos wizards) porque
+   auth-client.css está incluido en las tres. */
+[hidden] { display: none !important; }
+
 .au-modal {
   border: none;
   border-radius: var(--r-lg, 16px);
@@ -32,6 +42,11 @@
 .au-form { display: flex; flex-direction: column; gap: 12px; }
 .au-error { font-size: .85rem; }
 
+.au-cta-cuenta {
+  margin-top: 1rem; display: flex; align-items: center;
+  justify-content: space-between; gap: 1rem;
+}
+
 /* Chip de cuenta en el header */
 .au-account { position: relative; }
 .au-account-menu {
@@ -45,6 +60,13 @@
   padding: 10px 12px; border-radius: var(--r-md); cursor: pointer; font-size: .9rem; color: var(--ink);
 }
 .au-account-menu-item:hover { background: rgba(0, 0, 0, .05); }
+.au-account-menu-item[disabled] {
+  cursor: default; color: var(--ink-40, #b3ab9d);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.au-account-menu-item[disabled]:hover { background: none; }
+.au-soon { font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-40, #b3ab9d); }
+.au-account-menu-sep { height: 1px; background: var(--line-color, #e6e1d8); margin: 6px 4px; }
 
 @media (max-width: 900px) {
   /* Mismo criterio mobile-first que el resto del rediseño (sección 5 del

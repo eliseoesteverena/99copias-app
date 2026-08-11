@@ -235,6 +235,13 @@
       <div class="au-account">
         <button type="button" class="btn btn-sm btn-outline au-account-btn">${nombre}</button>
         <div class="au-account-menu" hidden>
+          <button type="button" class="au-account-menu-item" disabled title="Todavía no está disponible">
+            Mis pedidos <span class="au-soon">Próximamente</span>
+          </button>
+          <button type="button" class="au-account-menu-item" disabled title="Todavía no está disponible">
+            Mis opciones de entrega <span class="au-soon">Próximamente</span>
+          </button>
+          <div class="au-account-menu-sep"></div>
           <button type="button" class="au-account-menu-item au-logout">Cerrar sesión</button>
         </div>
       </div>`;
@@ -242,15 +249,24 @@
     const btn = container.querySelector('.au-account-btn');
     const menu = container.querySelector('.au-account-menu');
     btn.addEventListener('click', () => { menu.hidden = !menu.hidden; });
-    document.addEventListener('click', (ev) => {
-      if (!container.contains(ev.target)) menu.hidden = true;
-    });
     container.querySelector('.au-logout').addEventListener('click', async () => {
       menu.hidden = true;
       await signOut();
       await refrescarMontajes();
     });
   }
+
+  // Un único listener global (no uno por render — si no, se acumulan cada
+  // vez que el chip se re-renderiza tras login/logout) que cierra cualquier
+  // menú de cuenta abierto al clickear afuera.
+  document.addEventListener('click', (ev) => {
+    document.querySelectorAll('.au-account').forEach((acc) => {
+      if (!acc.contains(ev.target)) {
+        const menu = acc.querySelector('.au-account-menu');
+        if (menu) menu.hidden = true;
+      }
+    });
+  });
 
   async function refrescarMontajes() {
     const sesion = await getSession();

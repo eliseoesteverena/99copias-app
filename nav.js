@@ -11,7 +11,13 @@
 // login, así que el control vive acá (nav.js), no en el hub, que tiene su
 // propio header aparte y no llama a renderNav().
 //
-// Uso básico (usa toda la configuración por default):
+// [Rediseño] Dentro de los wizards ya no tiene sentido mostrar los links de
+// la landing (Cómo funciona/Ventajas/Precios/Preguntas) ni el CTA "Subir
+// archivo" — el cliente ya está adentro del formulario. El default ahora es
+// "sólo logo + cuenta"; los links/cta siguen existiendo como opción por si
+// nav.js se reusa en otra página que sí los necesite.
+//
+// Uso básico (el real, en los dos wizards — usa el default: sin links/cta):
 //   <script src="../auth-client.js"></script>
 //   <script src="../nav.js"></script>
 //   <script>renderNav();</script>
@@ -31,13 +37,8 @@ function renderNav(opts) {
     logoHref: 'https://99copias.com.ar',
     logoSrc: '../logo.svg',
     logoAlt: '99copias',
-    links: [
-      { label: 'Cómo funciona', href: 'https://99copias.com.ar/#como' },
-      { label: 'Ventajas', href: 'https://99copias.com.ar/#ventajas' },
-      { label: 'Precios', href: 'https://99copias.com.ar/#precios' },
-      { label: 'Preguntas', href: 'https://99copias.com.ar/#faq' },
-    ],
-    cta: { label: 'Subir archivo', href: 'https://app.99copias.com.ar', className: 'btn btn-mustard' },
+    links: [],  // sin links por default dentro del wizard — ver nota de rediseño arriba
+    cta: null,  // sin CTA por default — "Subir archivo" no aplica estando ya en el wizard
   }, opts || {});
 
   const linksHtml = cfg.links
@@ -48,19 +49,22 @@ function renderNav(opts) {
     ? `<a href="${cfg.cta.href}" class="${cfg.cta.className || 'btn btn-mustard'}" style="padding:10px 20px">${cfg.cta.label}</a>`
     : '';
 
+  // El burger sólo tiene sentido si hay links para colapsar en mobile — sin
+  // links (caso real de los wizards hoy) no se renderiza ni se cablea.
+  const mostrarLinks = cfg.links.length > 0;
+  const mostrarBurger = mostrarLinks;
+
   const html = `
     <header class="nav">
       <div class="wrap nav-inner">
         <a href="${cfg.logoHref}" class="logo" aria-label="${cfg.logoAlt} inicio">
           <img src="${cfg.logoSrc}" alt="${cfg.logoAlt}">
         </a>
-        <nav class="nav-links" id="navLinks" aria-label="Principal">${linksHtml}</nav>
+        ${mostrarLinks ? `<nav class="nav-links" id="navLinks" aria-label="Principal">${linksHtml}</nav>` : ''}
         <div class="nav-cta">
           ${ctaHtml}
           <div class="nav-account" data-auth-mount></div>
-          <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false">
-            <span></span><span></span><span></span>
-          </button>
+          ${mostrarBurger ? `<button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false"><span></span><span></span><span></span></button>` : ''}
         </div>
       </div>
     </header>`;
@@ -69,21 +73,23 @@ function renderNav(opts) {
   if (!mountEl) { console.error('renderNav: no se encontró el punto de montaje', cfg.mount); return; }
   mountEl.insertAdjacentHTML('afterbegin', html);
 
-  // Comportamiento del menú mobile — vive acá adentro para que cualquier
-  // página que llame a renderNav() lo obtenga automático, sin tener que
-  // cablear el burger/navLinks aparte en el JS de cada página.
+  // Comportamiento del menú mobile — sólo si efectivamente hay burger/links
+  // (guard explícito: con el default nuevo, sin links, estos elementos ni
+  // existen en el DOM).
   const burger = document.getElementById('burger');
   const navLinks = document.getElementById('navLinks');
-  burger.addEventListener('click', () => {
-    const open = navLinks.classList.toggle('open');
-    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-  navLinks.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', () => {
-      navLinks.classList.remove('open');
-      burger.setAttribute('aria-expanded', 'false');
+  if (burger && navLinks) {
+    burger.addEventListener('click', () => {
+      const open = navLinks.classList.toggle('open');
+      burger.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
-  });
+    navLinks.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => {
+        navLinks.classList.remove('open');
+        burger.setAttribute('aria-expanded', 'false');
+      });
+    });
+  }
 
   // Control de cuenta (login/logout) — si auth-client.js está cargado antes
   // que nav.js, lo montamos ya mismo en vez de esperar al DOMContentLoaded
