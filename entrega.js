@@ -1,9 +1,19 @@
 // entrega.js — paso "Entrega" (zona/punto + turno fusionados), compartido
 // por impresion-rapida/ y fotos/. Antes eran dos pasos separados (Paso 1
 // Zona/Dirección y Paso 3 Turno) con su lógica metida adentro de cada
-// app.js; wed sección 5 de HANDOFF_AUTENTICACION_Y_FLUJO.md los fusiona en
+// app.js; la sección 5 de HANDOFF_AUTENTICACION_Y_FLUJO.md los fusiona en
 // uno. Se centraliza acá en vez de duplicar la lógica en los dos app.js —
 // mismo criterio que nav.js/auth-client.js.
+//
+// [Rediseño de estados de selección] Un solo lenguaje visual para
+// zona/fecha/turno/"todos los turnos": sin seleccionar = borde fino;
+// seleccionado = borde grueso + tinte sutil + check en la esquina — ver
+// entrega.css. Sin amarillo ni rojo (no forman parte del sistema de
+// estados) — sólo --ink/--paper, la misma escala que ya usa el resto del
+// sitio. Las tabs Envío/Retiro (decisión primaria) usan subrayado; el
+// toggle Por-zona/Todos (una preferencia de vista, menor jerarquía) usa un
+// contorno más liviano — a propósito distintos entre sí, para que la
+// jerarquía de importancia también se note a simple vista.
 //
 // Uso (ver impresion-rapida/app.js y fotos/app.js para el caso real):
 //
@@ -47,6 +57,18 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     return '$' + Math.round(n).toLocaleString('es-AR');
   }
 
+  // Mueve suavemente la sección recién revelada a la vista — evita que el
+  // cliente tenga que ir a buscarla scrolleando a mano cada vez que aparece
+  // un paso nuevo (zona -> turno -> dirección). Respeta prefers-reduced-motion.
+  function scrollIntoViewSoon(selector) {
+    requestAnimationFrame(() => {
+      const el = mount.querySelector(selector);
+      if (!el) return;
+      const prefiereMenosMovimiento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ behavior: prefiereMenosMovimiento ? 'auto' : 'smooth', block: 'start' });
+    });
+  }
+
   function esValido() {
     if (!state.zona || !state.fecha || !state.turno) return false;
     if (!state.zona.es_retiro) {
@@ -73,21 +95,23 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
 
   function render() {
     mount.innerHTML = `
-      <div class="segmented entrega-tabs" id="entregaTabs" role="tablist">
-        <button type="button" data-tab="envio" class="${state.tab === 'envio' ? 'is-on' : ''}">Envío a domicilio</button>
-        <button type="button" data-tab="retiro" class="${state.tab === 'retiro' ? 'is-on' : ''}">Retiro</button>
+      <div class="ent-tabs" id="entregaTabs" role="tablist">
+        <button type="button" data-tab="envio" class="${state.tab === 'envio' ? 'is-on' : ''}" role="tab">Envío a domicilio</button>
+        <button type="button" data-tab="retiro" class="${state.tab === 'retiro' ? 'is-on' : ''}" role="tab">Retiro</button>
       </div>
-      <div class="entrega-toggle" id="entregaToggle">
+      <div class="ent-toggle" id="entregaToggle">
         <button type="button" data-vista="zona" class="${state.vista === 'zona' ? 'is-on' : ''}">Por zona/punto</button>
         <button type="button" data-vista="todos" class="${state.vista === 'todos' ? 'is-on' : ''}">Todos los turnos</button>
       </div>
       <div class="alert alert-error" id="entregaAlert" hidden></div>
 
       <div class="entrega-vista-zona" id="entregaVistaZona" ${state.vista === 'zona' ? '' : 'hidden'}>
-        <div class="zone-grid" id="entregaZonaGrid"><div class="empty">Cargando…</div></div>
+        <div class="ent-opt-list" id="entregaZonaGrid"><div class="empty">Cargando…</div></div>
         <div class="entrega-turno-block" id="entregaTurnoBlock" hidden>
-          <div class="date-picker" id="entregaDatePicker"></div>
-          <div class="slot-grid" id="entregaSlotGrid"></div>
+          <p class="ent-subhead">Elegí el día</p>
+          <div class="ent-opt-row" id="entregaDatePicker"></div>
+          <p class="ent-subhead" id="entregaSlotSubhead" hidden>Elegí el horario</p>
+          <div class="ent-opt-row" id="entregaSlotGrid"></div>
         </div>
         <div class="field entrega-direccion" id="entregaDireccionWrap" hidden>
           <label for="entregaDireccion">Dirección de entrega</label>
@@ -129,6 +153,12 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     state.fecha = null;
     state.turno = null;
     mount.querySelectorAll('#entregaTabs button').forEach((b) => b.classList.toggle('is-on', b.dataset.tab === tab));
+    const turnoBlock = mount.querySelector('#entregaTurnoBlock');
+    if (turnoBlock) turnoBlock.hidden = true;
+    const direccionWrap = mount.querySelector('#entregaDireccionWrap');
+    if (direccionWrap) direccionWrap.hidden = true;
+    const slotSubhead = mount.querySelector('#entregaSlotSubhead');
+    if (slotSubhead) slotSubhead.hidden = true;
     notificarValidez();
     if (state.vista === 'zona') await cargarZonasDeLaTab();
     else await cargarVistaTodos();
@@ -162,9 +192,11 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
       zonas.forEach((z) => {
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = 'zone-card' + (state.zona && state.zona.id === z.id ? ' is-selected' : '');
+        card.className = 'ent-opt ent-opt--row' + (state.zona && state.zona.id === z.id ? ' is-selected' : '');
+        card.dataset.zonaId = z.id;
         const envioLabel = z.es_retiro ? 'Sin costo' : money(z.precio_envio);
         card.innerHTML = `
+          <span class="ent-opt-check">✓</span>
           <span class="zn mono">${z.es_retiro ? 'RETIRO' : 'ZONA ' + String(z.id).padStart(2, '0')}</span>
           <div class="name">${z.nombre}</div>
           <div class="zn mono" style="margin-top:.4rem;">Envío: ${envioLabel}</div>`;
@@ -183,15 +215,16 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     state.fecha = null;
     state.turno = null;
     localStorage.setItem(LS_ZONA_ID, String(z.id));
-    mount.querySelectorAll('.zone-card').forEach((c) => c.classList.remove('is-selected'));
-    mount.querySelectorAll('#entregaZonaGrid .zone-card').forEach((c) => {
-      if (c.querySelector('.name').textContent === z.nombre) c.classList.add('is-selected');
+    mount.querySelectorAll('#entregaZonaGrid .ent-opt').forEach((c) => {
+      c.classList.toggle('is-selected', Number(c.dataset.zonaId) === z.id);
     });
     mount.querySelector('#entregaTurnoBlock').hidden = false;
     mount.querySelector('#entregaDireccionWrap').hidden = true; // se muestra recién con turno elegido
+    mount.querySelector('#entregaSlotSubhead').hidden = true;
     mount.querySelector('#entregaDatePicker').innerHTML = '<div class="empty">Cargando días disponibles…</div>';
     mount.querySelector('#entregaSlotGrid').innerHTML = '';
     notificarValidez();
+    scrollIntoViewSoon('#entregaTurnoBlock');
     try {
       state.diasConTurno = await apiGet('/api/turnos/dias?zona_id=' + z.id);
     } catch (err) {
@@ -219,8 +252,8 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
       const iso = d.toISOString().slice(0, 10);
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'date-chip' + (state.fecha === iso ? ' is-selected' : '');
-      chip.innerHTML = `<span class="dow">${dows[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>`;
+      chip.className = 'ent-opt ent-opt--chip' + (state.fecha === iso ? ' is-selected' : '');
+      chip.innerHTML = `<span class="ent-opt-check">✓</span><span class="dow">${dows[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>`;
       chip.addEventListener('click', () => seleccionarFecha(iso));
       wrap.appendChild(chip);
     }
@@ -235,8 +268,11 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     mount.querySelector('#entregaDireccionWrap').hidden = true;
     notificarValidez();
     buildDatePicker();
+    const subhead = mount.querySelector('#entregaSlotSubhead');
     const grid = mount.querySelector('#entregaSlotGrid');
+    subhead.hidden = false;
     grid.innerHTML = '<div class="empty">Buscando turnos…</div>';
+    scrollIntoViewSoon('#entregaSlotSubhead');
     try {
       const carillas = typeof carillasProvider === 'function' ? carillasProvider() : 0;
       const qs = new URLSearchParams({ zona_id: state.zona.id, fecha: iso, categoria, carillas });
@@ -250,14 +286,16 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
         const full = !t.disponible;
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = 'slot-card' + (full ? ' is-full' : '');
+        card.className = 'ent-opt ent-opt--slot' + (full ? ' is-full' : '');
         card.disabled = full;
         card.innerHTML = `
+          <span class="ent-opt-check">✓</span>
           <div class="range">${t.hora_inicio} – ${t.hora_fin}</div>
           <div class="cap">${full ? 'NO DISPONIBLE' : (t.capacidad_maxima ? (t.capacidad_maxima - t.ocupados) + ' cupos' : 'cupo abierto')}</div>`;
         if (!full) card.addEventListener('click', () => seleccionarTurno(t, card));
         grid.appendChild(card);
       });
+      scrollIntoViewSoon('#entregaSlotGrid');
     } catch (err) {
       console.error(err);
       grid.innerHTML = '<div class="empty">No pudimos cargar los turnos. Probá de nuevo.</div>';
@@ -266,12 +304,13 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
 
   function seleccionarTurno(t, cardEl) {
     state.turno = t;
-    mount.querySelectorAll('.slot-card').forEach((c) => c.classList.remove('is-selected'));
+    mount.querySelectorAll('#entregaSlotGrid .ent-opt').forEach((c) => c.classList.remove('is-selected'));
     if (cardEl) cardEl.classList.add('is-selected');
     // Progressive disclosure (sección 5 del handoff): la dirección recién
     // se pide después de elegir zona Y turno.
     if (state.zona && !state.zona.es_retiro) {
       mount.querySelector('#entregaDireccionWrap').hidden = false;
+      scrollIntoViewSoon('#entregaDireccionWrap');
     }
     notificarValidez();
   }
@@ -337,8 +376,9 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
         const [y, m, d] = fila.fecha.split('-');
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'entrega-todos-row';
+        row.className = 'ent-opt ent-opt--row entrega-todos-row';
         row.innerHTML = `
+          <span class="ent-opt-check">✓</span>
           <span class="mono">${d}-${m}-${y}</span>
           <span>${fila.turno.hora_inicio}–${fila.turno.hora_fin}</span>
           <span class="entrega-todos-zona">${fila.zona.nombre}</span>`;
@@ -360,6 +400,7 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     if (rowEl) rowEl.classList.add('is-selected');
     if (!state.zona.es_retiro) {
       mount.querySelector('#entregaDireccionWrap').hidden = false;
+      scrollIntoViewSoon('#entregaDireccionWrap');
     }
     notificarValidez();
   }

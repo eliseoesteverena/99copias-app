@@ -1,57 +1,128 @@
 /* entrega.css — paso "Entrega" (zona/punto + turno fusionados).
-   Reutiliza .zone-card, .date-chip, .slot-card, .segmented, .empty, .field,
-   .input, .alert (ya definidos en styles.css, usados antes en los pasos
-   separados de Zona y Turno) — acá sólo se agrega el layout que no existía:
-   las tabs Envío/Retiro, el toggle de vista, y la lista de "todos los
-   turnos". Mobile-first (sección 5 del handoff de auth): tabs de ancho
-   completo arriba de todo, tarjetas apiladas en una columna en mobile. */
 
-.entrega-tabs { width: 100%; margin-bottom: 14px; }
-.entrega-tabs button { flex: 1; }
+   [Rediseño] Sistema de estados único, en escala de grises (--ink/--paper/
+   --line, los mismos tokens que ya usa el resto del sitio) — sin amarillo
+   ni rojo, que no son parte del sistema de estados de selección:
 
-.entrega-toggle {
-  display: flex; gap: 8px; margin-bottom: 18px;
+     no seleccionado -> borde fino (var(--line))
+     seleccionado    -> borde grueso (2px var(--ink)) + tinte sutil + check
+                         en la esquina superior derecha
+     no disponible   -> opacidad reducida, sin puntero
+
+   La misma regla aplica a zonas, fechas, turnos y filas de "todos los
+   turnos" (clase base .ent-opt + variantes de tamaño/layout) — antes cada
+   uno tenía su propio tratamiento (tarjeta negra con check amarillo,
+   toggle amarillo, etc.), lo que hacía difícil distinguir "esto se puede
+   tocar" de "esto ya está elegido". Referencia de claridad: cómo Mercado
+   Libre resuelve selección de forma de entrega/turno — no se copia su
+   paleta (celeste), sólo el principio de contraste claro entre opción y
+   selección.
+
+   Tabs Envío/Retiro (decisión primaria) vs toggle Por-zona/Todos (una
+   preferencia de vista, menor jerarquía) usan tratamientos DISTINTOS a
+   propósito — subrayado vs contorno liviano — para que la jerarquía de
+   importancia también se note, no sólo el estado. */
+
+/* ---------- Tabs primarias: Envío / Retiro ---------- */
+.ent-tabs {
+  display: flex; width: 100%; margin-bottom: 22px; border-bottom: var(--line);
 }
-.entrega-toggle button {
+.ent-tabs button {
+  flex: 1; background: none; border: none; cursor: pointer;
+  padding: 12px 4px 14px; font-size: 1rem; font-weight: 500;
+  color: var(--ink-60, #8a8378); border-bottom: 2px solid transparent;
+  margin-bottom: -1px; transition: color .15s ease, border-color .15s ease;
+}
+.ent-tabs button.is-on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+
+/* ---------- Toggle secundario: Por zona/punto / Todos los turnos ---------- */
+.ent-toggle { display: flex; gap: 8px; margin-bottom: 20px; }
+.ent-toggle button {
   background: none; border: var(--line); border-radius: var(--r-md);
-  padding: 8px 14px; font-size: .82rem; font-weight: 600; cursor: pointer;
-  color: var(--ink-60, #8a8378); min-height: 44px; /* área de toque, sección 5 */
+  padding: 8px 14px; font-size: .82rem; font-weight: 500; cursor: pointer;
+  color: var(--ink-60, #8a8378); min-height: 44px; /* área de toque, mobile-first */
+  transition: border-color .15s ease, color .15s ease;
 }
-.entrega-toggle button.is-on { color: var(--ink); background: var(--yellow); border-color: transparent; }
+.ent-toggle button.is-on { color: var(--ink); font-weight: 600; border-color: var(--ink); }
 
-.entrega-turno-block { margin-top: 18px; }
+.ent-subhead {
+  font-size: .78rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ink-60, #8a8378); margin: 18px 0 10px;
+}
+
+/* ---------- Sistema de opción seleccionable — base ---------- */
+.ent-opt {
+  position: relative; border: var(--line); background: var(--paper);
+  border-radius: var(--r-md); cursor: pointer; text-align: left;
+  font: inherit; color: inherit;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.ent-opt:hover:not(:disabled):not(.is-selected) { border-color: var(--ink); }
+.ent-opt.is-selected {
+  border: 2px solid var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, var(--paper));
+}
+.ent-opt:disabled, .ent-opt.is-full {
+  opacity: .45; cursor: not-allowed;
+}
+.ent-opt:disabled:hover, .ent-opt.is-full:hover { border-color: var(--line-color, #e6e1d8); }
+
+.ent-opt-check {
+  position: absolute; top: 8px; right: 8px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--ink); color: var(--paper);
+  display: none; align-items: center; justify-content: center;
+  font-size: .68rem; line-height: 1;
+}
+.ent-opt.is-selected .ent-opt-check { display: flex; }
+
+/* Listas verticales (zonas, filas de "todos los turnos") */
+.ent-opt-list { display: flex; flex-direction: column; gap: 10px; }
+.ent-opt--row { width: 100%; padding: 14px 40px 14px 16px; display: block; }
+.ent-opt--row .zn { display: block; }
+.ent-opt--row .name { font-family: var(--font-display, inherit); font-size: 1.05rem; margin-top: .2rem; }
+
+/* Filas horizontales (días, turnos) */
+.ent-opt-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.ent-opt--chip {
+  display: inline-flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 10px 16px; min-width: 58px;
+}
+.ent-opt--chip .dow { font-size: .68rem; letter-spacing: .04em; color: var(--ink-60, #8a8378); }
+.ent-opt--chip .dnum { font-size: 1.15rem; font-weight: 600; margin-top: 2px; }
+.ent-opt--chip.is-selected .dow { color: var(--ink); }
+
+.ent-opt--slot { padding: 12px 30px 12px 14px; min-width: 128px; }
+.ent-opt--slot .range { font-weight: 600; }
+.ent-opt--slot .cap { font-size: .74rem; color: var(--ink-60, #8a8378); margin-top: 2px; }
+
+/* "Todos los turnos" reusa .ent-opt--row + layout propio en fila */
+.entrega-todos-row { display: flex; align-items: center; gap: 14px; font-size: .9rem; }
+.entrega-todos-zona { margin-left: auto; color: var(--ink-60, #8a8378); font-size: .82rem; }
+.entrega-todos-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+
+.entrega-turno-block { margin-top: 4px; }
 .entrega-direccion { margin-top: 18px; }
 
-.entrega-todos-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.entrega-todos-row {
-  display: flex; align-items: center; gap: 14px; width: 100%;
-  background: var(--paper); border: var(--line); border-radius: var(--r-md);
-  padding: 12px 14px; cursor: pointer; text-align: left; font-size: .9rem;
+/* Mobile-first: todo apilado en una columna, sin grillas que puedan cortar
+   texto en pantallas angostas. */
+@media (max-width: 900px) {
+  .ent-opt--chip { min-width: 52px; padding: 8px 12px; }
+  .entrega-todos-row { flex-wrap: wrap; }
+  .entrega-todos-zona { margin-left: 0; width: 100%; }
+
+  /* Espacio de scroll de sobra al pie del paso — evita que la última
+     sección revelada (dirección, último turno) quede pegada contra el nav
+     inferior fijo cuando se hace scroll automático hacia ella. */
+  #entregaMount { padding-bottom: 38vh; }
 }
-.entrega-todos-row.is-selected { border-color: var(--yellow); background: rgba(230, 190, 40, .12); }
-.entrega-todos-zona { margin-left: auto; color: var(--ink-60, #8a8378); font-size: .82rem; }
 
 /* Paso de Datos (Caso C) — resumen colapsado con link "Editar". No es
    estrictamente "Entrega", pero es parte del mismo rediseño de Fase 1 y no
    ameritaba un tercer archivo CSS sólo para dos reglas. */
 .datos-resumen { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 
-/* Zonas apiladas en una columna en mobile — no en grilla (sección 5:
-   "evita texto achicado o tarjetas cortadas en pantallas angostas"). Si
-   .zone-grid ya define una grilla para desktop en styles.css, esta regla
-   sólo pisa el breakpoint angosto. */
-@media (max-width: 900px) {
-  #entregaZonaGrid.zone-grid { grid-template-columns: 1fr; }
-  .entrega-todos-row { flex-wrap: wrap; }
-  .entrega-todos-zona { margin-left: 0; width: 100%; }
-}
-
-/* ------------------------------------------------------------------
-   PENDIENTE DE VERIFICAR A MANO: el diseño (sección 5 del handoff de
-   auth) pide que el botón "Continuar" quede fijo/sticky al pie de la
-   pantalla en mobile durante este paso. No tengo acceso a styles.css
-   (nunca se compartió en esta conversación), así que no puedo confirmar
-   si .wizard-nav ya es sticky o si hace falta agregarlo. Revisar a mano:
-   si .wizard-nav no tiene position:sticky/fixed en mobile, agregarlo ahí
-   (styles.css), no acá — es compartido por los 4 pasos, no sólo Entrega.
-   ------------------------------------------------------------------ */
+/* PENDIENTE DE VERIFICAR A MANO: no tengo acceso a styles.css en esta
+   conversación, así que no pude confirmar si .wizard-nav (el nav inferior
+   fijo con Atrás/Continuar) ya es sticky en mobile o si hace falta
+   agregarlo ahí — la ventana con padding-bottom de arriba asume que si lo
+   es. */

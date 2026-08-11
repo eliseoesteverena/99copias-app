@@ -561,6 +561,25 @@ const dropzoneMore = document.getElementById('dropzoneMore');
 /* =========================================================
    PASO 3 — datos del cliente (antes Paso 4)
    ========================================================= */
+
+// DNI -> Consumidor Final (Factura B) / CUIT -> Responsable Inscripto
+// (Factura A). Sólo informativo en el frontend — el proyecto no tiene
+// integración de facturación/AFIP real todavía (ver PROJECT_HANDOFF.md,
+// sección 9: "sujeto a confirmar con el contador"). La idea, tomada de
+// cómo Mercado Libre resuelve esto, es que el cliente sepa de entrada qué
+// tipo de comprobante le vamos a dar según el documento que cargue.
+function letraFactura(docTipo) { return docTipo === 'cuit' ? 'A' : 'B'; }
+function descripcionFactura(docTipo) {
+  return docTipo === 'cuit' ? 'Responsable Inscripto' : 'Consumidor Final';
+}
+
+function actualizarHintFactura() {
+  const docTipo = document.getElementById('cDocTipo').value;
+  document.getElementById('facturaHint').textContent =
+    `Se emitirá Factura ${letraFactura(docTipo)} (${descripcionFactura(docTipo)})`;
+}
+document.getElementById('cDocTipo').addEventListener('change', actualizarHintFactura);
+
 function prefillCliente() {
   if (!state.cliente) return;
   const c = state.cliente;
@@ -570,6 +589,7 @@ function prefillCliente() {
   document.getElementById('cDocNumero').value = c.documento_numero || '';
   document.getElementById('cEmail').value = c.email || '';
   document.getElementById('cCelular').value = c.celular || '';
+  actualizarHintFactura();
   updateNavState(); // el prefill no dispara "input" — hay que revalidar el botón a mano
 }
 
@@ -607,26 +627,31 @@ function clienteFormValido() {
 // resumen colapsado con "Editar" en vez de un formulario vacío. El
 // formulario sigue existiendo y precargado por debajo — sólo se oculta
 // visualmente — así que clienteFormValido()/readClienteForm() no cambian.
+// Formato del resumen ("Factura B · DNI 38.914.474 · Nombre Apellido")
+// inspirado en cómo Mercado Libre muestra el bloque de Facturación.
 function actualizarVistaDatos() {
   const perfil = state.miPerfil && state.miPerfil.perfil;
   const colapsado = document.getElementById('datosColapsados');
   const formWrap = document.getElementById('datosFormWrap');
 
   if (perfil && !state.datosEditadosAMano) {
+    const docTipo = perfil.documento_tipo || 'dni';
     document.getElementById('cNombre').value = perfil.nombre || '';
     document.getElementById('cApellido').value = perfil.apellido || '';
-    document.getElementById('cDocTipo').value = perfil.documento_tipo || 'dni';
+    document.getElementById('cDocTipo').value = docTipo;
     document.getElementById('cDocNumero').value = perfil.documento_numero || '';
     document.getElementById('cEmail').value = perfil.email_contacto || '';
     document.getElementById('cCelular').value = perfil.celular || '';
+    actualizarHintFactura();
     document.getElementById('datosResumenNombre').textContent = `${perfil.nombre} ${perfil.apellido}`;
     document.getElementById('datosResumenDoc').textContent =
-      `${(perfil.documento_tipo || 'dni').toUpperCase()} ${perfil.documento_numero || ''}`;
+      `Factura ${letraFactura(docTipo)} · ${docTipo.toUpperCase()} ${perfil.documento_numero || ''}`;
     colapsado.hidden = false;
     formWrap.hidden = true;
   } else {
     colapsado.hidden = true;
     formWrap.hidden = false;
+    actualizarHintFactura();
   }
   updateNavState();
 }
