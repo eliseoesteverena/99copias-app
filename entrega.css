@@ -1,0 +1,57 @@
+/* entrega.css — paso "Entrega" (zona/punto + turno fusionados).
+   Reutiliza .zone-card, .date-chip, .slot-card, .segmented, .empty, .field,
+   .input, .alert (ya definidos en styles.css, usados antes en los pasos
+   separados de Zona y Turno) — acá sólo se agrega el layout que no existía:
+   las tabs Envío/Retiro, el toggle de vista, y la lista de "todos los
+   turnos". Mobile-first (sección 5 del handoff de auth): tabs de ancho
+   completo arriba de todo, tarjetas apiladas en una columna en mobile. */
+
+.entrega-tabs { width: 100%; margin-bottom: 14px; }
+.entrega-tabs button { flex: 1; }
+
+.entrega-toggle {
+  display: flex; gap: 8px; margin-bottom: 18px;
+}
+.entrega-toggle button {
+  background: none; border: var(--line); border-radius: var(--r-md);
+  padding: 8px 14px; font-size: .82rem; font-weight: 600; cursor: pointer;
+  color: var(--ink-60, #8a8378); min-height: 44px; /* área de toque, sección 5 */
+}
+.entrega-toggle button.is-on { color: var(--ink); background: var(--yellow); border-color: transparent; }
+
+.entrega-turno-block { margin-top: 18px; }
+.entrega-direccion { margin-top: 18px; }
+
+.entrega-todos-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.entrega-todos-row {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  background: var(--paper); border: var(--line); border-radius: var(--r-md);
+  padding: 12px 14px; cursor: pointer; text-align: left; font-size: .9rem;
+}
+.entrega-todos-row.is-selected { border-color: var(--yellow); background: rgba(230, 190, 40, .12); }
+.entrega-todos-zona { margin-left: auto; color: var(--ink-60, #8a8378); font-size: .82rem; }
+
+/* Paso de Datos (Caso C) — resumen colapsado con link "Editar". No es
+   estrictamente "Entrega", pero es parte del mismo rediseño de Fase 1 y no
+   ameritaba un tercer archivo CSS sólo para dos reglas. */
+.datos-resumen { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+
+/* Zonas apiladas en una columna en mobile — no en grilla (sección 5:
+   "evita texto achicado o tarjetas cortadas en pantallas angostas"). Si
+   .zone-grid ya define una grilla para desktop en styles.css, esta regla
+   sólo pisa el breakpoint angosto. */
+@media (max-width: 900px) {
+  #entregaZonaGrid.zone-grid { grid-template-columns: 1fr; }
+  .entrega-todos-row { flex-wrap: wrap; }
+  .entrega-todos-zona { margin-left: 0; width: 100%; }
+}
+
+/* ------------------------------------------------------------------
+   PENDIENTE DE VERIFICAR A MANO: el diseño (sección 5 del handoff de
+   auth) pide que el botón "Continuar" quede fijo/sticky al pie de la
+   pantalla en mobile durante este paso. No tengo acceso a styles.css
+   (nunca se compartió en esta conversación), así que no puedo confirmar
+   si .wizard-nav ya es sticky o si hace falta agregarlo. Revisar a mano:
+   si .wizard-nav no tiene position:sticky/fixed en mobile, agregarlo ahí
+   (styles.css), no acá — es compartido por los 4 pasos, no sólo Entrega.
+   ------------------------------------------------------------------ */

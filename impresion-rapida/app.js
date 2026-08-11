@@ -1,22 +1,18 @@
-/* ========================================================
+/* =========================================================
    ESTADO GLOBAL
    ========================================================= */
-const LS_ZONA = 'imprenta.zona';
 const LS_CLIENTE = 'imprenta.cliente';
 const LS_DIRECCION = 'imprenta.direccion';
 
 const state = {
   step: 1,
-  zona: JSON.parse(localStorage.getItem(LS_ZONA) || 'null'), // {id, nombre}
-  productos: [],           // catálogo desde /api/productos
-  fecha: null,              // 'YYYY-MM-DD' elegida
-  turno: null,              // objeto turno elegido
+  productos: [],
   cliente: JSON.parse(localStorage.getItem(LS_CLIENTE) || 'null'),
-  // (dirección de entrega ya no vive en el state — se lee directo del input del Paso 1)
   // Todos los archivos de este pedido suben bajo la misma carpeta de staging en R2
   // (staging/{sesionSubida}/...) — se confirman o se limpian juntos.
   sesionSubida: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
-  diasConTurno: null, // array de dia_semana (0-6) con turnos activos en la zona elegida, o null = sin filtrar
+  miPerfil: null,           // { perfil, ultima_entrega } — de /api/mi-perfil (Caso C)
+  datosEditadosAMano: false, // una vez que el cliente toca "Editar", no lo volvemos a colapsar solo
 };
 
 let fileIdCounter = 0;
@@ -24,6 +20,18 @@ const files = new Map(); // id -> { file, isImage, thumbUrl, numPages, settings:
 
 // Cada proyecto/formulario "es" una categoría — esto es lo único que identifica cuál.
 const CATEGORIA = 'impresion-rapida';
+
+// Paso de Entrega (zona + turno fusionados) — módulo compartido, ver entrega.js.
+const entrega = createEntregaStep({
+  mount: document.getElementById('entregaMount'),
+  categoria: CATEGORIA,
+  carillasProvider: () => {
+    let total = 0;
+    files.forEach((entry) => { total += calcularArchivo(entry).carillas; });
+    return total;
+  },
+  onValidChange: () => updateNavState(),
+});
 
 /* =========================================================
    UTILIDADES DE CÁLCULO (espejo del cálculo server-side)
@@ -51,22 +59,13 @@ function contarPaginasEnRango(rango, totalPaginas) {
   return set.size || totalPaginas;
 }
 
-function productoPorCodigo(codigo) {
-  return state.productos.find(p => p.codigo === codigo);
-}
-function precioPorCodigo(codigo) {
-  const p = productoPorCodigo(codigo);
-  return p ? p.precio : 0;
-}
-function primariosDisponibles() {
-  return state.productos.filter(p => p.jerarquia === 'primario');
-}
-function secundariosDisponibles() {
-  return state.productos.filter(p => p.jerarquia === 'secundario');
-}
+function productoPorCodigo(codigo) { return state.productos.find(p => p.codigo === codigo); }
+function precioPorCodigo(codigo) { const p = productoPorCodigo(codigo); return p ? p.precio : 0; }
+function primariosDisponibles() { return state.productos.filter(p => p.jerarquia === 'primario'); }
+function secundariosDisponibles() { return state.productos.filter(p => p.jerarquia === 'secundario'); }
+
 function labelProducto(p) {
   // "Impresión ByN A4 (carilla)" -> "ByN" / "Impresión Color A4 (carilla)" -> "Color"
-  // Si el patrón no matchea (otro producto a futuro), se muestra la descripción entera.
   const m = p.descripcion.match(/Impresión\s+(\S+)/i);
   return m ? m[1] : p.descripcion;
 }
@@ -78,13 +77,10 @@ function calcularArchivo(entry) {
   const paginasPorCarilla = entry.isImage ? 1 : (entry.settings.paginasPorCarilla || 1);
   const hojasFisicas = Math.ceil(paginas / paginasPorCarilla);
   const carillas = hojasFisicas * copias;
-
   const precioPrimario = precioPorCodigo(entry.settings.primario);
   const subtotalPrimario = carillas * precioPrimario;
-
   const precioSecundario = precioPorCodigo(entry.settings.acabado);
   const subtotalSecundario = copias * precioSecundario;
-
   return {
     paginas, copias, paginasPorCarilla, hojasFisicas, carillas,
     subtotalPrimario, subtotalSecundario,
@@ -140,150 +136,24 @@ async function loadProductos() {
   }
 }
 
-async function loadZonas() {
-  const grid = document.getElementById('zoneGrid');
+// Caso C (HANDOFF_AUTENTICACION_Y_FLUJO.md sección 5): perfil_fiscal + zona
+// del último pedido, para pre-cargar en vez de partir de cero. Nunca falla
+// el flujo si esto no vuelve nada (invitado, o cuenta nueva sin pedidos).
+async function loadMiPerfil() {
   try {
-    const zonas = await apiGet('/api/zonas');
-    if (!zonas.length) {
-      grid.innerHTML = '<div class="empty">No hay zonas de entrega habilitadas por el momento.</div>';
-      return;
-    }
-    grid.innerHTML = '';
-    zonas.forEach(z => {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'zone-card' + (z.es_retiro ? ' is-retiro' : '') + (state.zona && state.zona.id === z.id ? ' is-selected' : '');
-      const envioLabel = z.es_retiro ? 'Sin costo' : money(z.precio_envio);
-      card.innerHTML = `
-        <span class="zn mono">${z.es_retiro ? 'RETIRO' : 'ZONA ' + String(z.id).padStart(2, '0')}</span>
-        <div class="name">${z.nombre}</div>
-        <div class="zn mono" style="margin-top:.4rem;">Envío: ${envioLabel}</div>`;
-      card.addEventListener('click', () => selectZona(z));
-      grid.appendChild(card);
-    });
-
-    // Si ya había una zona guardada de una visita anterior, restauramos también
-    // el estado del campo de dirección (mostrado/oculto + prefill).
-    if (state.zona) {
-      const wrapDireccion = document.getElementById('wrapDireccion');
-      wrapDireccion.style.display = state.zona.es_retiro ? 'none' : 'block';
-      if (!state.zona.es_retiro) {
-        document.getElementById('direccionEntrega').value = localStorage.getItem(LS_DIRECCION) || '';
-      }
-    }
+    state.miPerfil = await apiGet('/api/mi-perfil');
   } catch (err) {
-    console.error(err);
-    document.getElementById('zoneAlert').textContent = 'No pudimos cargar las zonas de entrega. Probá recargar la página.';
-    document.getElementById('zoneAlert').style.display = 'flex';
-    grid.innerHTML = '';
+    console.error('No se pudo cargar el perfil (no bloquea el pedido):', err);
+    state.miPerfil = { perfil: null, ultima_entrega: null };
   }
-}
-
-function selectZona(z) {
-  state.zona = { id: z.id, nombre: z.nombre, precio_envio: z.precio_envio, es_retiro: !!z.es_retiro };
-  localStorage.setItem(LS_ZONA, JSON.stringify(state.zona));
-  document.querySelectorAll('.zone-card').forEach(c => c.classList.remove('is-selected'));
-  document.getElementById('zoneGrid').querySelectorAll('.zone-card').forEach(c => {
-    if (c.querySelector('.name').textContent === z.nombre) c.classList.add('is-selected');
-  });
-
-  const wrapDireccion = document.getElementById('wrapDireccion');
-  wrapDireccion.style.display = z.es_retiro ? 'none' : 'block';
-  if (!z.es_retiro && !document.getElementById('direccionEntrega').value) {
-    document.getElementById('direccionEntrega').value = localStorage.getItem(LS_DIRECCION) || '';
+  if (state.miPerfil.ultima_entrega) {
+    entrega.setUltimaEntrega(state.miPerfil.ultima_entrega);
   }
-  updateNavState();
 }
 
 function truncarNombre(nombre, max) {
   if (nombre.length <= max) return nombre;
   return nombre.slice(0, max - 1) + '…';
-}
-
-function formatearFechaDDMMAAAA(iso) {
-  const [y, m, d] = iso.split('-');
-  return `${d}-${m}-${y}`;
-}
-
-/* ---------- Turnos ---------- */
-async function cargarDiasConTurno() {
-  try {
-    state.diasConTurno = await apiGet('/api/turnos/dias?zona_id=' + state.zona.id);
-  } catch (err) {
-    console.error('No se pudieron cargar los días con turnos, se muestran todos:', err);
-    state.diasConTurno = null; // null = no pudimos filtrar, mostramos los 14 días igual
-  }
-}
-
-function buildDatePicker() {
-  const wrap = document.getElementById('datePicker');
-  const diasConTurno = state.diasConTurno;
-
-  wrap.innerHTML = '';
-  const dows = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
-  const hoy = new Date();
-  let algunDiaMostrado = false;
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(hoy);
-    d.setDate(hoy.getDate() + i);
-    if (diasConTurno && !diasConTurno.includes(d.getDay())) continue; // sin turnos ese día de la semana
-    algunDiaMostrado = true;
-    const iso = d.toISOString().slice(0, 10);
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'date-chip' + (state.fecha === iso ? ' is-selected' : '');
-    chip.innerHTML = `<span class="dow">${dows[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>`;
-    chip.addEventListener('click', () => selectFecha(iso));
-    wrap.appendChild(chip);
-  }
-  if (!algunDiaMostrado) {
-    wrap.innerHTML = '<div class="empty">No hay turnos configurados para esta zona en los próximos días.</div>';
-  }
-}
-
-async function selectFecha(iso) {
-  state.fecha = iso;
-  state.turno = null;
-  document.querySelectorAll('.date-chip').forEach(c => c.classList.remove('is-selected'));
-  buildDatePicker(); // re-render para marcar selección
-  const grid = document.getElementById('slotGrid');
-  grid.innerHTML = '<div class="empty">Buscando turnos…</div>';
-  try {
-    let carillasTotal = 0;
-    files.forEach(entry => { carillasTotal += calcularArchivo(entry).carillas; });
-    const qs = new URLSearchParams({ zona_id: state.zona.id, fecha: iso, categoria: CATEGORIA, carillas: carillasTotal });
-    const turnos = await apiGet(`/api/turnos?${qs.toString()}`);
-    if (!turnos.length) {
-      grid.innerHTML = '<div class="empty">No hay turnos disponibles para esta fecha. Probá con otro día.</div>';
-      updateNavState();
-      return;
-    }
-    grid.innerHTML = '';
-    turnos.forEach(t => {
-      const full = !t.disponible;
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'slot-card' + (full ? ' is-full' : '');
-      card.disabled = full;
-      card.innerHTML = `
-        <span class="day mono">${formatearFechaDDMMAAAA(iso)}</span>
-        <div class="range">${t.hora_inicio} – ${t.hora_fin}</div>
-        <div class="cap">${full ? 'NO DISPONIBLE' : (t.capacidad_maxima ? (t.capacidad_maxima - t.ocupados) + ' cupos' : 'cupo abierto')}</div>`;
-      if (!full) card.addEventListener('click', () => selectTurno(t, card));
-      grid.appendChild(card);
-    });
-  } catch (err) {
-    console.error(err);
-    grid.innerHTML = '<div class="empty">No pudimos cargar los turnos. Probá de nuevo.</div>';
-  }
-  updateNavState();
-}
-
-function selectTurno(t, cardEl) {
-  state.turno = t;
-  document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('is-selected'));
-  cardEl.classList.add('is-selected');
-  updateNavState();
 }
 
 /* =========================================================
@@ -367,7 +237,6 @@ async function subirArchivo(id) {
   entry.subiendo = true;
   entry.errorSubida = null;
   actualizarEstadoSubida(id);
-
   try {
     const qs = new URLSearchParams({ nombre: entry.file.name, sesion: state.sesionSubida });
     const res = await fetch('/api/archivos?' + qs.toString(), {
@@ -425,7 +294,6 @@ async function readPdfMeta(id) {
     canvas.width = scaledViewport.width;
     canvas.height = scaledViewport.height;
     await page.render({ canvasContext: canvas.getContext('2d'), viewport: scaledViewport }).promise;
-
     const current = files.get(id);
     if (!current) return;
     current.numPages = pdf.numPages;
@@ -437,16 +305,9 @@ async function readPdfMeta(id) {
 }
 
 function labelFaz(v) { return v === 'doble' ? 'Doble faz' : 'Simple faz'; }
-function labelProductoActual(entry) {
-  const p = productoPorCodigo(entry.settings.primario);
-  return p ? labelProducto(p) : '';
-}
-function labelAcabado(v) {
-  const p = productoPorCodigo(v);
-  return p ? labelSecundario(p) : 'Suelto';
-}
+function labelProductoActual(entry) { const p = productoPorCodigo(entry.settings.primario); return p ? labelProducto(p) : ''; }
+function labelAcabado(v) { const p = productoPorCodigo(v); return p ? labelSecundario(p) : 'Suelto'; }
 function labelSecundario(p) {
-  // "Anillados A4" -> "Anillado", "Abrochadas" -> "Abrochado", "Sueltas" -> "Suelto", "Clip" -> "Clip"
   const map = { suelto: 'Suelto', abrochado: 'Abrochado', anillado: 'Anillado', clip: 'Clip' };
   return map[p.codigo] || p.descripcion;
 }
@@ -475,9 +336,6 @@ function renderAcabadoBotones(entry) {
   }).join('');
 }
 
-// Debajo del segmented, un aviso puntual si el acabado elegido justo dejó de ser válido
-// (ej. el cliente achicó el rango de páginas, o subió páginas-por-carilla, después de
-// haber elegido "Anillado").
 function acabadoBloqueadoHint(entry) {
   const actual = productoPorCodigo(entry.settings.acabado);
   if (actual && !acabadoPermitido(entry, actual)) {
@@ -575,16 +433,12 @@ function renderFileList() {
       const btn = e.target.closest('button');
       if (!btn || btn.disabled) return;
       const campo = group.dataset.field;
-
-      // Solo "acabado" tiene un estado "sin elegir" implícito (Suelto) — clickear
-      // de nuevo el botón ya activo lo deselecciona y vuelve a ese default.
       if (campo === 'acabado' && btn.classList.contains('is-on')) {
         btn.classList.remove('is-on');
         files.get(group.dataset.id).settings.acabado = 'suelto';
         updateDim(group.dataset.id);
         return;
       }
-
       group.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
       btn.classList.add('is-on');
       const valor = campo === 'paginasPorCarilla' ? parseInt(btn.dataset.value, 10) : btn.dataset.value;
@@ -601,7 +455,6 @@ function renderFileList() {
       const entry = files.get(id);
       if (entry) {
         if (entry.isImage && entry.thumbUrl) URL.revokeObjectURL(entry.thumbUrl);
-        // Si ya se había subido (o está subiendo) a staging, lo borramos de R2 también.
         if (entry.r2Key) {
           fetch('/api/archivos?key=' + encodeURIComponent(entry.r2Key), { method: 'DELETE' }).catch(() => {});
         }
@@ -616,24 +469,18 @@ function renderFileList() {
       updateNavState();
     });
   });
-
   updateNavState();
 }
 
 function updateDim(id) {
   const entry = files.get(id);
   if (!entry) return;
-
-  // Si el acabado elegido ya no cumple el mínimo de páginas (ej. el cliente acaba de
-  // achicar el rango), volvemos automáticamente a "Suelto" en vez de dejar una
-  // selección inválida sin que se note.
   const actual = productoPorCodigo(entry.settings.acabado);
   let volvioASuelto = false;
   if (actual && !acabadoPermitido(entry, actual) && entry.settings.acabado !== 'suelto') {
     entry.settings.acabado = 'suelto';
     volvioASuelto = true;
   }
-
   const calc = calcularArchivo(entry);
   const el = document.getElementById('dim-' + id);
   if (el) {
@@ -643,9 +490,6 @@ function updateDim(id) {
     el.querySelector('span:nth-child(2)').textContent = detalle;
     el.querySelector('.result').innerHTML = `${labelProductoActual(entry)} · ${labelFaz(entry.settings.faz)} · ${labelAcabado(entry.settings.acabado)} <span class="amt">${money(calc.total)}</span>`;
   }
-
-  // El habilitado/deshabilitado de cada botón de acabado depende de la cantidad de
-  // páginas actual, así que se recalcula en cada edición (rango, copias, etc.).
   const grupoAcabado = document.querySelector(`.segmented[data-id="${id}"][data-field="acabado"]`);
   if (grupoAcabado) grupoAcabado.innerHTML = renderAcabadoBotones(entry);
   const hintWrap = grupoAcabado ? grupoAcabado.parentElement : null;
@@ -655,12 +499,9 @@ function updateDim(id) {
     hintWrap.insertAdjacentHTML('beforeend',
       `<p class="hint" style="color:var(--danger); margin-top:.4rem;">Volvimos a "Suelto": "${labelSecundario(actual)}" necesita al menos ${actual.paginas_minimas} páginas.</p>`);
   }
-
   updateNavState();
 }
 
-// Los segmented de la configuración global (arriba de la lista de archivos) necesitan
-// su propio listener para togglear is-on — son distintos de los de cada tarjeta.
 document.querySelectorAll('#gAcabado, #gFaz, #gPrimario, #gPaginasPorCarilla').forEach(group => {
   group.addEventListener('click', e => {
     const btn = e.target.closest('button');
@@ -688,7 +529,6 @@ document.getElementById('btnApplyAll').addEventListener('click', () => {
     }
   });
   renderFileList();
-
   const alertEl = document.getElementById('rejectedAlert');
   if (bloqueados.length) {
     alertEl.textContent = `"${labelSecundario(productoPorCodigo(g.acabado))}" necesita al menos ${productoPorCodigo(g.acabado).paginas_minimas} hojas físicas por copia — quedó en "Suelto" para: ${bloqueados.join(', ')}`;
@@ -719,7 +559,7 @@ const dropzoneMore = document.getElementById('dropzoneMore');
 });
 
 /* =========================================================
-   PASO 4 — datos del cliente
+   PASO 3 — datos del cliente (antes Paso 4)
    ========================================================= */
 function prefillCliente() {
   if (!state.cliente) return;
@@ -735,8 +575,7 @@ function prefillCliente() {
 
 // El botón "Continuar" depende de que el formulario esté completo — hay que
 // revalidarlo en cada tecleo.
-document.getElementById('panel-4').addEventListener('input', updateNavState);
-document.getElementById('direccionEntrega').addEventListener('input', updateNavState);
+document.getElementById('panel-3').addEventListener('input', updateNavState);
 
 function readClienteForm() {
   return {
@@ -750,34 +589,74 @@ function readClienteForm() {
 }
 
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 function clienteFormValido() {
   const c = readClienteForm();
   if (!c.nombre || !c.apellido) return false;
-
   const soloDigitos = c.documento_numero.replace(/\D/g, '');
   const docValido = c.documento_tipo === 'cuit'
     ? soloDigitos.length === 11
     : soloDigitos.length >= 7 && soloDigitos.length <= 8;
   if (!docValido) return false;
-
   if (!REGEX_EMAIL.test(c.email)) return false;
-
   const celularDigitos = c.celular.replace(/\D/g, '');
   if (celularDigitos.length < 8) return false;
-
   return true;
 }
 
-// "Retiro en local" no necesita dirección — queda un valor fijo y legible
-// para vos al mirar el pedido, en vez de un campo vacío.
-function direccionEntregaFinal() {
-  if (state.zona && state.zona.es_retiro) return 'Retiro en local';
-  return document.getElementById('direccionEntrega').value.trim();
+// Caso C (cliente logueado con perfil_fiscal ya cargado): mostramos un
+// resumen colapsado con "Editar" en vez de un formulario vacío. El
+// formulario sigue existiendo y precargado por debajo — sólo se oculta
+// visualmente — así que clienteFormValido()/readClienteForm() no cambian.
+function actualizarVistaDatos() {
+  const perfil = state.miPerfil && state.miPerfil.perfil;
+  const colapsado = document.getElementById('datosColapsados');
+  const formWrap = document.getElementById('datosFormWrap');
+
+  if (perfil && !state.datosEditadosAMano) {
+    document.getElementById('cNombre').value = perfil.nombre || '';
+    document.getElementById('cApellido').value = perfil.apellido || '';
+    document.getElementById('cDocTipo').value = perfil.documento_tipo || 'dni';
+    document.getElementById('cDocNumero').value = perfil.documento_numero || '';
+    document.getElementById('cEmail').value = perfil.email_contacto || '';
+    document.getElementById('cCelular').value = perfil.celular || '';
+    document.getElementById('datosResumenNombre').textContent = `${perfil.nombre} ${perfil.apellido}`;
+    document.getElementById('datosResumenDoc').textContent =
+      `${(perfil.documento_tipo || 'dni').toUpperCase()} ${perfil.documento_numero || ''}`;
+    colapsado.hidden = false;
+    formWrap.hidden = true;
+  } else {
+    colapsado.hidden = true;
+    formWrap.hidden = false;
+  }
+  updateNavState();
 }
 
+document.getElementById('btnEditarDatos').addEventListener('click', () => {
+  state.datosEditadosAMano = true;
+  document.getElementById('datosColapsados').hidden = true;
+  document.getElementById('datosFormWrap').hidden = false;
+});
+
+// Caso B (invitado a mitad de camino): CTA no bloqueante para crear cuenta.
+// Se esconde solo apenas hay sesión real (evento 'authchange' de auth-client.js).
+async function actualizarVisibilidadCtaCuenta() {
+  const cta = document.getElementById('ctaCrearCuenta');
+  if (!cta) return;
+  const sesion = window.AuthClient ? await window.AuthClient.getSession() : null;
+  const esInvitado = !sesion || !sesion.user || sesion.user.isAnonymous;
+  cta.hidden = !esInvitado;
+}
+document.getElementById('btnCtaCrearCuenta').addEventListener('click', () => {
+  if (window.AuthUI) window.AuthUI.open('signup');
+});
+window.addEventListener('authchange', () => {
+  actualizarVisibilidadCtaCuenta();
+  // Si justo se logueó/creó cuenta en medio del paso de Datos, no hay perfil
+  // todavía (se crea recién al pagar) — no hace falta recargar mi-perfil acá.
+});
+
 /* =========================================================
-   PASO 5 — resumen y pago
+   PASO 4 — resumen y pago (antes Paso 5)
    ========================================================= */
 async function renderResumenFinal() {
   const body = document.getElementById('finalBody');
@@ -797,27 +676,24 @@ async function renderResumenFinal() {
     body.appendChild(row);
   });
   document.getElementById('finalCount').textContent = files.size + (files.size === 1 ? ' archivo' : ' archivos');
-
   const subtotalImpresion = calcularTotalPedido();
   document.getElementById('finalTotal').textContent = money(subtotalImpresion); // valor provisorio mientras llega el envío
 
+  const resultadoEntrega = entrega.getResultado();
+  if (!resultadoEntrega) return; // no debería pasar (stepValido ya lo exigió), defensivo nomás
   try {
-    const qs = new URLSearchParams({ zona_id: state.zona.id, categoria: CATEGORIA, carillas: carillasTotal });
+    const qs = new URLSearchParams({ zona_id: resultadoEntrega.zona.id, categoria: CATEGORIA, carillas: carillasTotal });
     const envio = await apiGet('/api/envio?' + qs.toString());
-
     const rowEnvio = document.createElement('div');
     rowEnvio.className = 'receipt-row';
     const etiquetaEnvio = envio.con_envio
-      ? `Envío a ${state.zona.nombre}${envio.descuento_porcentaje ? ` (−${envio.descuento_porcentaje}% por volumen)` : ''}`
+      ? `Envío a ${resultadoEntrega.zona.nombre}${envio.descuento_porcentaje ? ` (−${envio.descuento_porcentaje}% por volumen)` : ''}`
       : 'Retiro en local';
     rowEnvio.innerHTML = `<div><div class="name">${etiquetaEnvio}</div></div><div class="val">${money(envio.costo_envio)}</div>`;
     body.appendChild(rowEnvio);
-
     document.getElementById('finalTotal').textContent = money(subtotalImpresion + envio.costo_envio);
   } catch (err) {
     console.error('No se pudo calcular el envío:', err);
-    // El total mostrado queda sin envío; el servidor lo va a calcular igual al confirmar,
-    // así que no bloquea el pago — solo el preview queda incompleto.
   }
 }
 
@@ -827,15 +703,16 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
   errEl.style.display = 'none';
   btn.disabled = true;
   btn.textContent = 'Generando checkout…';
-
   try {
+    const resultadoEntrega = entrega.getResultado();
+    if (!resultadoEntrega) throw new Error('Falta terminar de elegir la entrega.');
     const payload = {
       categoria: CATEGORIA,
       cliente: readClienteForm(),
-      zona_id: state.zona.id,
-      turno_entrega_id: state.turno.turno_entrega_id,
-      fecha_entrega: state.fecha,
-      direccion_entrega: direccionEntregaFinal(),
+      zona_id: resultadoEntrega.zona.id,
+      turno_entrega_id: resultadoEntrega.turno.turno_entrega_id,
+      fecha_entrega: resultadoEntrega.fecha,
+      direccion_entrega: resultadoEntrega.direccion,
       archivos: [...files.values()].map(entry => ({
         nombre: entry.file.name,
         paginas: entry.isImage ? 1 : (entry.numPages || 1),
@@ -848,17 +725,12 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
         r2_key: entry.r2Key,
       })),
     };
-
     const { trabajo_id } = await apiPost('/api/trabajos', payload);
     const { init_point } = await apiPost('/api/checkout', { trabajo_id });
-
     localStorage.setItem(LS_CLIENTE, JSON.stringify(payload.cliente));
-    if (!state.zona.es_retiro) localStorage.setItem(LS_DIRECCION, payload.direccion_entrega);
+    if (!resultadoEntrega.zona.es_retiro) localStorage.setItem(LS_DIRECCION, payload.direccion_entrega);
     state.trabajoIdPago = trabajo_id;
 
-    // No redirigimos directo: en desktop es común no estar logueado en MP.
-    // Mostramos QR (para pagar desde el celular) + link para seguir en la misma pestaña.
-    // En mobile el QR no tiene sentido (es el mismo dispositivo) — solo el link.
     const esDesktop = window.innerWidth > 640;
     document.getElementById('payQrBlock').style.display = esDesktop ? 'block' : 'none';
     if (esDesktop) {
@@ -868,11 +740,6 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     document.getElementById('payLink').href = init_point;
     document.getElementById('payLaunch').style.display = 'block';
     btn.style.display = 'none';
-
-    // Si se paga escaneando el QR con la app de Mercado Pago, el pago se completa
-    // en el celular y esta pestaña de escritorio nunca recibe ningún back_url de vuelta
-    // (no hay redirect posible entre dispositivos distintos). Por eso preguntamos
-    // nosotros mismos, cada pocos segundos, si ya se acreditó.
     iniciarPollingPago(trabajo_id);
   } catch (err) {
     console.error(err);
@@ -884,17 +751,13 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
 });
 
 /* =========================================================
-   NAVEGACIÓN DEL WIZARD
+   NAVEGACIÓN DEL WIZARD (4 pasos: Archivos, Entrega, Datos, Pago)
    ========================================================= */
 function stepValido(n) {
   switch (n) {
-    case 1:
-      if (!state.zona) return false;
-      if (state.zona.es_retiro) return true;
-      return !!document.getElementById('direccionEntrega').value.trim();
-    case 2: return files.size > 0 && [...files.values()].every(e => e.r2Key && !e.subiendo && !e.errorSubida);
-    case 3: return !!(state.fecha && state.turno);
-    case 4: return clienteFormValido();
+    case 1: return files.size > 0 && [...files.values()].every(e => e.r2Key && !e.subiendo && !e.errorSubida);
+    case 2: return entrega.esValido();
+    case 3: return clienteFormValido();
     default: return true;
   }
 }
@@ -910,11 +773,10 @@ function updateStepline() {
 function updateNavState() {
   document.getElementById('btnBack').style.visibility = state.step === 1 ? 'hidden' : 'visible';
   const btnNext = document.getElementById('btnNext');
-  const isLast = state.step === 5;
+  const isLast = state.step === 4;
   btnNext.style.display = isLast ? 'none' : 'inline-flex';
   btnNext.disabled = !stepValido(state.step);
   btnNext.textContent = 'Continuar →';
-
   const peek = document.getElementById('pricePeek');
   if (files.size > 0) {
     peek.innerHTML = '<span class="amt">' + money(calcularTotalPedido()) + '</span>';
@@ -929,21 +791,23 @@ function goToStep(n) {
   document.getElementById('panel-' + state.step).classList.add('is-active');
   updateStepline();
   updateNavState();
-
-  if (n === 3) {
-    document.getElementById('turnoZonaLabel').textContent = `Turnos disponibles para ${state.zona ? state.zona.nombre : 'tu zona'}.`;
-    document.getElementById('datePicker').innerHTML = '<div class="empty">Cargando días disponibles…</div>';
-    cargarDiasConTurno().then(buildDatePicker);
+  if (n === 2) {
+    entrega.activar().then(() => {
+      // Restaurar dirección de una compra anterior, si había (comportamiento
+      // heredado) — entrega.js no conoce esta persistencia, es propia de
+      // cada wizard.
+      const dirEl = document.getElementById('entregaDireccion');
+      if (dirEl && !dirEl.value) dirEl.value = localStorage.getItem(LS_DIRECCION) || '';
+    });
   }
-  if (n === 4) prefillCliente();
-  if (n === 5) renderResumenFinal();
-
+  if (n === 3) { prefillCliente(); actualizarVistaDatos(); actualizarVisibilidadCtaCuenta(); }
+  if (n === 4) renderResumenFinal();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 document.getElementById('btnNext').addEventListener('click', () => {
   if (!stepValido(state.step)) return;
-  if (state.step < 5) goToStep(state.step + 1);
+  if (state.step < 4) goToStep(state.step + 1);
 });
 document.getElementById('btnBack').addEventListener('click', () => {
   if (state.step > 1) goToStep(state.step - 1);
@@ -979,7 +843,6 @@ function mostrarResultado(estadoKey, trabajoId) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('is-active'));
   document.getElementById('stepline').style.display = 'none';
   document.querySelector('.wizard-nav').style.display = 'none';
-
   document.getElementById('resultadoDoodle').style.color = r.color;
   document.getElementById('resultadoEyebrow').textContent = r.eyebrow;
   document.getElementById('resultadoTitulo').textContent = r.titulo;
@@ -996,15 +859,11 @@ function mostrarResultadoSiCorresponde() {
   return true;
 }
 
-// Polling de respaldo: cubre el caso de pago por QR (escaneado con la app de MP),
-// donde nunca hay un back_url de vuelta a esta pestaña. Se corta solo al confirmar
-// el pago, al fallar repetidamente, o después de 10 minutos para no dejarlo colgado.
 let pollingPagoId = null;
 function iniciarPollingPago(trabajoId) {
   if (pollingPagoId) clearInterval(pollingPagoId);
   const inicio = Date.now();
   const LIMITE_MS = 10 * 60 * 1000;
-
   pollingPagoId = setInterval(async () => {
     if (Date.now() - inicio > LIMITE_MS) {
       clearInterval(pollingPagoId);
@@ -1017,7 +876,7 @@ function iniciarPollingPago(trabajoId) {
         mostrarResultado('aprobado', trabajoId);
       }
     } catch (err) {
-      console.error('Error consultando estado del pago:', err); // se sigue reintentando solo
+      console.error('Error consultando estado del pago:', err);
     }
   }, 4000);
 }
@@ -1031,24 +890,16 @@ document.getElementById('btnNuevoPedido').addEventListener('click', () => {
    ========================================================= */
 (async function init() {
   if (mostrarResultadoSiCorresponde()) return; // no inicializamos el wizard en esta vista
-
-  await loadProductos();
-  await loadZonas();
+  await Promise.all([loadProductos(), loadMiPerfil()]);
   updateStepline();
   updateNavState();
 })();
-
 
 /* ---------------------------------------------------------
    SHARE TARGET — recibir archivos compartidos desde el hub
    --------------------------------------------------------- */
 const SHARE_CACHE = 'share-target-temp';
 
-// addFiles() calcula el precio usando state.productos (cargado por
-// loadProductos() dentro de init(), en paralelo). Si se llama a addFiles
-// antes de que ese fetch termine, el precio sale $0 porque no hay catálogo
-// todavía. Esperamos acá a que esté listo, con un límite por las dudas de
-// que el fetch falle y nunca resuelva.
 async function esperarProductos(maxEsperaMs = 8000) {
   const inicio = Date.now();
   while (state.productos.length === 0 && Date.now() - inicio < maxEsperaMs) {
@@ -1060,15 +911,15 @@ async function loadSharedFilesIfAny() {
   const params = new URLSearchParams(location.search);
   if (params.get('share-target') !== '1') return;
   if (!('caches' in window)) return;
-  
+
   const cache = await caches.open(SHARE_CACHE);
   const indexRes = await cache.match('/shared-files-index');
   if (!indexRes) return;
-  
+
   const shared = await indexRes.json();
   const entries = shared.files || [];
   const files = [];
-  
+
   for (const item of entries) {
     const res = await cache.match(item.key);
     if (!res) continue;
@@ -1078,24 +929,17 @@ async function loadSharedFilesIfAny() {
       lastModified: item.lastModified,
     }));
   }
-  
-  // Limpiamos el cache temporal una sola vez que ya los tenemos en memoria.
+
   await caches.delete(SHARE_CACHE);
-  
   if (files.length === 0) return;
-  
-  // Sacamos el query param de la URL para no volver a disparar esto si el
-  // usuario refresca la página.
+
   const url = new URL(location.href);
   url.searchParams.delete('share-target');
   history.replaceState(null, '', url.toString());
-  
+
   await esperarProductos();
   handleIncomingFiles(files);
 }
 
-function handleIncomingFiles(files) {
-  addFiles(files);
-}
-
+function handleIncomingFiles(files) { addFiles(files); }
 window.addEventListener('load', loadSharedFilesIfAny);

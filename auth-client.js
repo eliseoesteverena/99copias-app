@@ -211,14 +211,22 @@
     return (nombreCompleto || '').trim().split(/\s+/)[0] || 'Cuenta';
   }
 
+  function abrirModal(tabInicial) {
+    const dialog = crearModal();
+    if (tabInicial) {
+      const tabBtn = dialog.querySelector(`.au-tab[data-tab="${tabInicial}"]`);
+      if (tabBtn && !tabBtn.classList.contains('is-active')) tabBtn.click();
+    }
+    dialog.showModal();
+    return dialog;
+  }
+
   function render(container, sesion) {
     const esInvitado = !sesion || !sesion.user || sesion.user.isAnonymous;
 
     if (esInvitado) {
       container.innerHTML = `<button type="button" class="btn btn-sm au-login-btn">Iniciar sesión</button>`;
-      container.querySelector('.au-login-btn').addEventListener('click', () => {
-        crearModal().showModal();
-      });
+      container.querySelector('.au-login-btn').addEventListener('click', () => abrirModal('login'));
       return;
     }
 
@@ -247,12 +255,22 @@
   async function refrescarMontajes() {
     const sesion = await getSession();
     document.querySelectorAll('[data-auth-mount]').forEach((el) => render(el, sesion));
+    // Cualquier página puede escuchar esto para reaccionar a un cambio de
+    // sesión sin recargar (ej. esconder el CTA de "creá una cuenta" del
+    // paso de Datos apenas alguien se loguea — Caso B, sección 5 del
+    // handoff de auth).
+    window.dispatchEvent(new CustomEvent('authchange', { detail: sesion }));
+    return sesion;
   }
 
-  window.AuthUI = { mount: render, refresh: refrescarMontajes };
+  // `open('signup' | 'login')` — usado por el CTA no-bloqueante del paso de
+  // Datos ("Creá una cuenta para hacer seguimiento de tu pedido", Caso B de
+  // HANDOFF_AUTENTICACION_Y_FLUJO.md sección 5).
+  window.AuthUI = { mount: render, refresh: refrescarMontajes, open: abrirModal };
 
   document.addEventListener('DOMContentLoaded', async () => {
     const sesion = await ensureSession();
     document.querySelectorAll('[data-auth-mount]').forEach((el) => render(el, sesion));
+    window.dispatchEvent(new CustomEvent('authchange', { detail: sesion }));
   });
 })();
