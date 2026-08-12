@@ -13,6 +13,7 @@ const state = {
   sesionSubida: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
   miPerfil: null,           // { perfil, ultima_entrega } — de /api/mi-perfil (Caso C)
   datosEditadosAMano: false, // una vez que el cliente toca "Editar", no lo volvemos a colapsar solo
+  checkoutGenerado: false, // una vez true, se esconde "Atrás" — no tiene sentido retroceder sobre un pedido ya creado en el servidor
 };
 
 let fileIdCounter = 0;
@@ -726,8 +727,8 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
   const btn = document.getElementById('btnPagar');
   const errEl = document.getElementById('payError');
   errEl.style.display = 'none';
-  btn.disabled = true;
-  btn.textContent = 'Generando checkout…';
+  if (window.AuthClient) window.AuthClient.setCargando(btn, true, 'Generando checkout…');
+  else { btn.disabled = true; btn.textContent = 'Generando checkout…'; } // fallback si auth-client.js no cargó
   try {
     const resultadoEntrega = entrega.getResultado();
     if (!resultadoEntrega) throw new Error('Falta terminar de elegir la entrega.');
@@ -765,13 +766,17 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     document.getElementById('payLink').href = init_point;
     document.getElementById('payLaunch').style.display = 'block';
     btn.style.display = 'none';
+    // El checkout ya se generó — esconder "Atrás" para no invitar a
+    // retroceder sobre un pedido que ya se creó del lado del servidor.
+    state.checkoutGenerado = true;
+    updateNavState();
     iniciarPollingPago(trabajo_id);
   } catch (err) {
     console.error(err);
     errEl.textContent = err.message || 'No pudimos generar el checkout. Intentá de nuevo en unos segundos.';
     errEl.style.display = 'flex';
-    btn.disabled = false;
-    btn.textContent = 'Ir a pagar con Mercado Pago →';
+    if (window.AuthClient) window.AuthClient.setCargando(btn, false);
+    else { btn.disabled = false; btn.textContent = 'Ir a pagar con Mercado Pago →'; }
   }
 });
 
@@ -796,7 +801,7 @@ function updateStepline() {
 }
 
 function updateNavState() {
-  document.getElementById('btnBack').style.visibility = state.step === 1 ? 'hidden' : 'visible';
+  document.getElementById('btnBack').style.visibility = (state.step === 1 || state.checkoutGenerado) ? 'hidden' : 'visible';
   const btnNext = document.getElementById('btnNext');
   const isLast = state.step === 4;
   btnNext.style.display = isLast ? 'none' : 'inline-flex';
@@ -808,6 +813,22 @@ function updateNavState() {
   } else {
     peek.textContent = '';
   }
+  actualizarMensajeSubida();
+}
+
+// Aviso sutil arriba del footer mientras todavía hay archivos subiéndose a
+// R2 — sin esto, "Continuar" se ve deshabilitado sin que quede claro por
+// qué. Sólo aplica al Paso 1 (una vez que se avanza, stepValido(1) ya
+// exigió que todo esté subido, así que naturalmente deja de mostrarse).
+function actualizarMensajeSubida() {
+  const el = document.getElementById('uploadStatusFooter');
+  if (!el) return;
+  const total = files.size;
+  if (state.step !== 1 || total === 0) { el.hidden = true; return; }
+  const completados = [...files.values()].filter(e => e.r2Key && !e.subiendo).length;
+  if (completados >= total) { el.hidden = true; return; }
+  el.textContent = `Subiendo ${completados}/${total} archivos…`;
+  el.hidden = false;
 }
 
 function goToStep(n) {

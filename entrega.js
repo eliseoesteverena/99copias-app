@@ -106,10 +106,24 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
       <div class="alert alert-error" id="entregaAlert" hidden></div>
 
       <div class="entrega-vista-zona" id="entregaVistaZona" ${state.vista === 'zona' ? '' : 'hidden'}>
+        <div class="ent-summary" id="entregaZonaSummary" hidden>
+          <div><span class="ent-summary-label">Zona/punto</span><div class="ent-summary-value" id="entregaZonaSummaryValue"></div></div>
+          <button type="button" class="btn btn-sm btn-ghost" id="entregaZonaCambiar">Cambiar</button>
+        </div>
         <div class="ent-opt-list" id="entregaZonaGrid"><div class="empty">Cargando…</div></div>
+
         <div class="entrega-turno-block" id="entregaTurnoBlock" hidden>
-          <p class="ent-subhead">Elegí el día</p>
+          <div class="ent-summary" id="entregaFechaSummary" hidden>
+            <div><span class="ent-summary-label">Día</span><div class="ent-summary-value" id="entregaFechaSummaryValue"></div></div>
+            <button type="button" class="btn btn-sm btn-ghost" id="entregaFechaCambiar">Cambiar</button>
+          </div>
+          <p class="ent-subhead" id="entregaFechaSubhead">Elegí el día</p>
           <div class="ent-opt-row" id="entregaDatePicker"></div>
+
+          <div class="ent-summary" id="entregaSlotSummary" hidden>
+            <div><span class="ent-summary-label">Horario</span><div class="ent-summary-value" id="entregaSlotSummaryValue"></div></div>
+            <button type="button" class="btn btn-sm btn-ghost" id="entregaSlotCambiar">Cambiar</button>
+          </div>
           <p class="ent-subhead" id="entregaSlotSubhead" hidden>Elegí el horario</p>
           <div class="ent-opt-row" id="entregaSlotGrid"></div>
         </div>
@@ -131,6 +145,9 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     mount.querySelectorAll('#entregaToggle button').forEach((btn) => {
       btn.addEventListener('click', () => cambiarVista(btn.dataset.vista));
     });
+    mount.querySelector('#entregaZonaCambiar')?.addEventListener('click', expandirZona);
+    mount.querySelector('#entregaFechaCambiar')?.addEventListener('click', expandirFecha);
+    mount.querySelector('#entregaSlotCambiar')?.addEventListener('click', expandirSlot);
     mount.querySelector('#entregaDireccion')?.addEventListener('input', notificarValidez);
     mount.querySelector('#entregaVerMas')?.addEventListener('click', () => {
       state.ventanaTodos += VENTANA_DIAS_INICIAL;
@@ -157,6 +174,20 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     if (turnoBlock) turnoBlock.hidden = true;
     const direccionWrap = mount.querySelector('#entregaDireccionWrap');
     if (direccionWrap) direccionWrap.hidden = true;
+    // Volver a expandir todo lo que pudiera haber quedado colapsado de la
+    // zona/tab anterior (secciones tipo "details" — ver colapsar*/expandir*).
+    ['Zona', 'Fecha', 'Slot'].forEach((seccion) => {
+      const summary = mount.querySelector('#entrega' + seccion + 'Summary');
+      if (summary) summary.hidden = true;
+    });
+    const grid = mount.querySelector('#entregaZonaGrid');
+    if (grid) grid.hidden = false;
+    const fechaSubhead = mount.querySelector('#entregaFechaSubhead');
+    if (fechaSubhead) fechaSubhead.hidden = false;
+    const datePicker = mount.querySelector('#entregaDatePicker');
+    if (datePicker) datePicker.hidden = false;
+    const slotGrid = mount.querySelector('#entregaSlotGrid');
+    if (slotGrid) slotGrid.hidden = false;
     const slotSubhead = mount.querySelector('#entregaSlotSubhead');
     if (slotSubhead) slotSubhead.hidden = true;
     notificarValidez();
@@ -171,6 +202,94 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     mount.querySelector('#entregaVistaZona').hidden = vista !== 'zona';
     mount.querySelector('#entregaVistaTodos').hidden = vista !== 'todos';
     if (vista === 'todos') cargarVistaTodos();
+  }
+
+  // ---------------------------------------------------------------
+  // Colapso tipo <details> de cada sub-sección (zona -> día -> horario):
+  // apenas se elige algo, esa lista se reemplaza por un resumen de una
+  // línea + "Cambiar", y el foco pasa a la siguiente. "Cambiar" reabre la
+  // lista Y invalida todo lo que dependía de esa elección (igual que
+  // cambiarTab). Esto, sumado al auto-scroll, evita tener las tres listas
+  // completas abiertas a la vez en una pantalla chica.
+  // ---------------------------------------------------------------
+  function colapsarZona(z) {
+    const envioLabel = z.es_retiro ? 'Sin costo' : money(z.precio_envio);
+    const valueEl = mount.querySelector('#entregaZonaSummaryValue');
+    if (valueEl) valueEl.textContent = `${z.nombre} · Envío: ${envioLabel}`;
+    const summary = mount.querySelector('#entregaZonaSummary');
+    const grid = mount.querySelector('#entregaZonaGrid');
+    if (summary) summary.hidden = false;
+    if (grid) grid.hidden = true;
+  }
+  function expandirZona() {
+    const summary = mount.querySelector('#entregaZonaSummary');
+    const grid = mount.querySelector('#entregaZonaGrid');
+    if (summary) summary.hidden = true;
+    if (grid) grid.hidden = false;
+    state.zona = null;
+    state.fecha = null;
+    state.turno = null;
+    const turnoBlock = mount.querySelector('#entregaTurnoBlock');
+    if (turnoBlock) turnoBlock.hidden = true;
+    const direccionWrap = mount.querySelector('#entregaDireccionWrap');
+    if (direccionWrap) direccionWrap.hidden = true;
+    notificarValidez();
+  }
+
+  function colapsarFecha(iso) {
+    const [y, m, d] = iso.split('-');
+    const valueEl = mount.querySelector('#entregaFechaSummaryValue');
+    if (valueEl) valueEl.textContent = `${d}-${m}-${y}`;
+    const summary = mount.querySelector('#entregaFechaSummary');
+    const subhead = mount.querySelector('#entregaFechaSubhead');
+    const picker = mount.querySelector('#entregaDatePicker');
+    if (summary) summary.hidden = false;
+    if (subhead) subhead.hidden = true;
+    if (picker) picker.hidden = true;
+  }
+  function expandirFecha() {
+    const summary = mount.querySelector('#entregaFechaSummary');
+    const subhead = mount.querySelector('#entregaFechaSubhead');
+    const picker = mount.querySelector('#entregaDatePicker');
+    if (summary) summary.hidden = true;
+    if (subhead) subhead.hidden = false;
+    if (picker) picker.hidden = false;
+    state.fecha = null;
+    state.turno = null;
+    expandirSlotInterno();
+    const direccionWrap = mount.querySelector('#entregaDireccionWrap');
+    if (direccionWrap) direccionWrap.hidden = true;
+    notificarValidez();
+  }
+
+  function colapsarSlot(t) {
+    const valueEl = mount.querySelector('#entregaSlotSummaryValue');
+    if (valueEl) valueEl.textContent = `${t.hora_inicio}–${t.hora_fin}`;
+    const summary = mount.querySelector('#entregaSlotSummary');
+    const subhead = mount.querySelector('#entregaSlotSubhead');
+    const grid = mount.querySelector('#entregaSlotGrid');
+    if (summary) summary.hidden = false;
+    if (subhead) subhead.hidden = true;
+    if (grid) grid.hidden = true;
+  }
+  // Reset "silencioso" del bloque de horario, sin tocar state.turno de
+  // nuevo ni disparar notificarValidez — lo usa expandirFecha() (que ya se
+  // encarga de eso) para no duplicar trabajo.
+  function expandirSlotInterno() {
+    const summary = mount.querySelector('#entregaSlotSummary');
+    const subhead = mount.querySelector('#entregaSlotSubhead');
+    const grid = mount.querySelector('#entregaSlotGrid');
+    if (summary) summary.hidden = true;
+    if (subhead) subhead.hidden = true; // recién se muestra cuando hay turnos cargados (seleccionarFecha)
+    if (grid) { grid.hidden = false; grid.innerHTML = ''; }
+  }
+  function expandirSlot() {
+    expandirSlotInterno();
+    mount.querySelector('#entregaSlotSubhead').hidden = false; // acá sí, ya había fecha elegida
+    state.turno = null;
+    const direccionWrap = mount.querySelector('#entregaDireccionWrap');
+    if (direccionWrap) direccionWrap.hidden = true;
+    notificarValidez();
   }
 
   // ---------------------------------------------------------------
@@ -223,6 +342,7 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     mount.querySelector('#entregaSlotSubhead').hidden = true;
     mount.querySelector('#entregaDatePicker').innerHTML = '<div class="empty">Cargando días disponibles…</div>';
     mount.querySelector('#entregaSlotGrid').innerHTML = '';
+    colapsarZona(z);
     notificarValidez();
     scrollIntoViewSoon('#entregaTurnoBlock');
     try {
@@ -268,6 +388,7 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     mount.querySelector('#entregaDireccionWrap').hidden = true;
     notificarValidez();
     buildDatePicker();
+    colapsarFecha(iso);
     const subhead = mount.querySelector('#entregaSlotSubhead');
     const grid = mount.querySelector('#entregaSlotGrid');
     subhead.hidden = false;
@@ -306,6 +427,7 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     state.turno = t;
     mount.querySelectorAll('#entregaSlotGrid .ent-opt').forEach((c) => c.classList.remove('is-selected'));
     if (cardEl) cardEl.classList.add('is-selected');
+    colapsarSlot(t);
     // Progressive disclosure (sección 5 del handoff): la dirección recién
     // se pide después de elegir zona Y turno.
     if (state.zona && !state.zona.es_retiro) {

@@ -1,8 +1,9 @@
 /* auth-client.css — estilos del modal de login/registro y del chip de
    cuenta montados por auth-client.js. Reutiliza las custom properties ya
-   definidas en styles.css (--paper, --ink, --line, --r-md, --yellow) para
-   no introducir una paleta paralela; sólo agrega layout nuevo (prefijo au-)
-   que no existía en el proyecto. */
+   definidas en styles.css (--paper, --ink, --line, --r-md) para no
+   introducir una paleta paralela; sólo agrega layout nuevo (prefijo au-)
+   que no existía en el proyecto. [Rediseño] Sin amarillo/rojo en los
+   estados de selección — mismo criterio que entrega.css. */
 
 /* Bug real encontrado: varias clases del proyecto (.field, .au-form, y
    estilos inline con display:flex) le ganan al atributo [hidden] en la
@@ -33,7 +34,7 @@
   font-weight: 600; font-size: .9rem; color: var(--ink-60, #8a8378);
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
-.au-tab.is-active { color: var(--ink); border-bottom-color: var(--yellow); }
+.au-tab.is-active { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
 
 .au-modal-body { display: flex; flex-direction: column; gap: 14px; }
 .au-divider { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--ink-60, #8a8378); }
@@ -73,4 +74,20 @@
      handoff de auth): el chip de cuenta no debe competir con el burger en
      una barra angosta. */
   .au-account-btn { padding: 8px 12px; font-size: .85rem; }
+}
+
+/* ---------- Spinner de "cargando" para botones ----------
+   Reutilizado por auth-client.js (crear cuenta / iniciar sesión) y por
+   btnPagar en cada app.js (checkout de Mercado Pago) — se carga acá porque
+   auth-client.css está presente en las tres páginas. */
+.btn.is-loading { opacity: .6; cursor: default; pointer-events: none; }
+.btn-spinner {
+  display: inline-block; width: 14px; height: 14px; margin-right: 8px;
+  border: 2px solid currentColor; border-top-color: transparent;
+  border-radius: 50%; vertical-align: -2px;
+  animation: btn-spin .7s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn-spinner { animation: none; border-top-color: currentColor; opacity: .5; }
 }

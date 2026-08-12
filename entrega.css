@@ -50,6 +50,22 @@
   color: var(--ink-60, #8a8378); margin: 18px 0 10px;
 }
 
+/* Resumen colapsado (tipo <details> cerrado) de una sub-sección ya
+   elegida — mismo tratamiento visual que ".ent-opt.is-selected" (borde
+   grueso + tinte), para que se lea como "esto ya quedó elegido", no como
+   una tarjeta más para tocar. */
+.ent-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 2px solid var(--ink); border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ink) 6%, var(--paper));
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.ent-summary-label {
+  display: block; font-size: .72rem; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-60, #8a8378);
+}
+.ent-summary-value { font-weight: 600; margin-top: 2px; }
+
 /* ---------- Sistema de opción seleccionable — base ---------- */
 .ent-opt {
   position: relative; border: var(--line); background: var(--paper);
@@ -102,6 +118,11 @@
 
 .entrega-turno-block { margin-top: 4px; }
 .entrega-direccion { margin-top: 18px; }
+
+.wizard-footer-note {
+  text-align: center; font-size: .78rem; color: var(--ink-60, #8a8378);
+  padding: 4px 0; margin: 0;
+}
 
 /* Mobile-first: todo apilado en una columna, sin grillas que puedan cortar
    texto en pantallas angostas. */

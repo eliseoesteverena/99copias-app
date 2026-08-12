@@ -18,6 +18,41 @@
 (function () {
   const BASE = '/api/auth';
 
+  // Better Auth devuelve todos sus mensajes en inglés — no hay opción de
+  // idioma en la config del servidor. Se traduce acá, en un solo lugar, en
+  // vez de dejar pasar el inglés crudo a la UI. Cubre tanto los códigos que
+  // vuelven en la URL al fallar un login social (?error=...) como los
+  // mensajes directos de /sign-up/email y /sign-in/email.
+  const MENSAJES_ERROR_OAUTH = {
+    // 'account not linked' con espacios (el mensaje real, ver
+    // oauth2/link-account.mjs) se convierte a snake_case en la URL del
+    // lado del servidor antes de llegar acá.
+    account_not_linked: 'Ya existe una cuenta con este email creada con usuario y contraseña. Iniciá sesión con tu contraseña — más adelante vas a poder vincular Google desde tu cuenta.',
+    unable_to_link_account: 'No pudimos vincular tu cuenta de Google. Probá de nuevo en un momento.',
+    unable_to_get_user_info: 'Google no nos devolvió tus datos. Probá de nuevo.',
+    invalid_code: 'El enlace de Google expiró o ya se usó. Iniciá sesión de nuevo.',
+    oauth_provider_not_found: 'Hubo un problema con el login de Google. Probá de nuevo en un momento.',
+    no_code: 'No pudimos completar el login con Google. Probá de nuevo.',
+    no_callback_url: 'Hubo un problema técnico al volver de Google. Probá de nuevo.',
+    email_not_found: 'Tu cuenta de Google no tiene un email público — no podemos usarla para iniciar sesión acá.',
+    invalid_callback_request: 'Hubo un problema al volver de Google. Probá de nuevo.',
+    signup_disabled: 'El registro con Google no está disponible en este momento.',
+    unable_to_create_user: 'No pudimos crear tu cuenta. Probá de nuevo.',
+    unable_to_create_session: 'No pudimos iniciar tu sesión. Probá de nuevo.',
+    "email_doesn't_match": 'Ese email no coincide con tu cuenta actual.',
+    account_already_linked_to_different_user: 'Esa cuenta de Google ya está vinculada a otro usuario.',
+  };
+  const MENSAJES_ERROR_API = {
+    'User already exists. Use another email.': 'Ya existe una cuenta con ese email. Iniciá sesión, o usá otro email.',
+    'User already exists.': 'Ya existe una cuenta con ese email.',
+    'Invalid email or password': 'Email o contraseña incorrectos.',
+    'User not found': 'No encontramos ninguna cuenta con ese email.',
+  };
+  function mensajeAmigable(crudo) {
+    if (!crudo) return 'Ocurrió un error inesperado. Probá de nuevo.';
+    return MENSAJES_ERROR_OAUTH[crudo] || MENSAJES_ERROR_API[crudo] || crudo; // si no lo conocemos, mostramos el original — mejor que nada
+  }
+
   async function req(path, opts) {
     const config = {
       credentials: 'include',
@@ -38,7 +73,7 @@
     try { data = await res.json(); } catch { /* respuestas sin body, ej. sign-out */ }
     if (!res.ok) {
       const msg = (data && (data.message || data.error)) || `Error ${res.status}`;
-      throw new Error(msg);
+      throw new Error(mensajeAmigable(msg));
     }
     return data;
   }
@@ -80,9 +115,18 @@
   }
 
   async function signInGoogle(callbackURL) {
+    // errorCallbackURL: si el login social falla (ej. account_not_linked),
+    // Better Auth redirige acá con ?error=<código> en vez de mostrar su
+    // propia pantalla de error default — lo leemos en el DOMContentLoaded
+    // de más abajo y lo mostramos traducido en el mismo modal.
+    const urlLimpia = window.location.origin + window.location.pathname;
     const data = await req('/sign-in/social', {
       method: 'POST',
-      body: JSON.stringify({ provider: 'google', callbackURL: callbackURL || window.location.href }),
+      body: JSON.stringify({
+        provider: 'google',
+        callbackURL: callbackURL || window.location.href,
+        errorCallbackURL: urlLimpia,
+      }),
     });
     if (data && data.url) {
       window.location.href = data.url;
@@ -99,8 +143,6 @@
     return ensureSession();
   }
 
-  window.AuthClient = { getSession, ensureSession, signInEmail, signUpEmail, signInGoogle, signOut };
-
   // ------------------------------------------------------------------
   // UI — control de cuenta en el header + modal de login/registro.
   // Estilos con clases ya existentes en el proyecto (.btn, .field, .input,
@@ -110,6 +152,24 @@
   // ------------------------------------------------------------------
 
   let modalEl = null;
+
+  // Estado de "cargando" para botones — spinner + disabled + opacidad
+  // reducida (vía .is-loading en auth-client.css). Guarda el texto
+  // original en un data-attribute para poder restaurarlo tal cual estaba,
+  // sin asumir cuál era.
+  function setCargando(btn, cargando, textoCargando) {
+    if (!btn) return;
+    if (cargando) {
+      if (btn.dataset.textoOriginal === undefined) btn.dataset.textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + (textoCargando || btn.dataset.textoOriginal);
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+      btn.textContent = btn.dataset.textoOriginal !== undefined ? btn.dataset.textoOriginal : btn.textContent;
+    }
+  }
 
   function crearModal() {
     if (modalEl) return modalEl;
@@ -180,26 +240,34 @@
     dialog.querySelector('form[data-mode="login"]').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       limpiarError();
+      const submitBtn = ev.target.querySelector('button[type="submit"]');
       const fd = new FormData(ev.target);
+      setCargando(submitBtn, true, 'Iniciando sesión…');
       try {
         await signInEmail(fd.get('email'), fd.get('password'));
         dialog.close();
         await refrescarMontajes();
       } catch (err) {
         mostrarError(err.message || 'No pudimos iniciar sesión. Revisá tus datos.');
+      } finally {
+        setCargando(submitBtn, false);
       }
     });
 
     dialog.querySelector('form[data-mode="signup"]').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       limpiarError();
+      const submitBtn = ev.target.querySelector('button[type="submit"]');
       const fd = new FormData(ev.target);
+      setCargando(submitBtn, true, 'Creando cuenta…');
       try {
         await signUpEmail(fd.get('email'), fd.get('password'), fd.get('name'));
         dialog.close();
         await refrescarMontajes();
       } catch (err) {
         mostrarError(err.message || 'No pudimos crear la cuenta.');
+      } finally {
+        setCargando(submitBtn, false);
       }
     });
 
@@ -284,9 +352,31 @@
   // HANDOFF_AUTENTICACION_Y_FLUJO.md sección 5).
   window.AuthUI = { mount: render, refresh: refrescarMontajes, open: abrirModal };
 
+  window.AuthClient = { getSession, ensureSession, signInEmail, signUpEmail, signInGoogle, signOut, setCargando };
+
+  // Si volvimos de /api/auth/callback/google con un error (ej.
+  // account_not_linked), errorCallbackURL nos trajo de vuelta acá con
+  // ?error=<código> en vez de la pantalla default de Better Auth. Se
+  // muestra traducido, en el mismo modal, con la pestaña de login activa
+  // (la salida más probable: "iniciá sesión con tu contraseña").
+  function manejarErrorDeOAuthSiVuelveDeGoogle() {
+    const params = new URLSearchParams(window.location.search);
+    const codigo = params.get('error');
+    if (!codigo) return;
+    params.delete('error');
+    params.delete('error_description');
+    const qs = params.toString();
+    const urlLimpia = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+    history.replaceState(null, '', urlLimpia);
+    const dialog = abrirModal('login');
+    const errorBox = dialog.querySelector('.au-error');
+    if (errorBox) { errorBox.textContent = mensajeAmigable(codigo); errorBox.hidden = false; }
+  }
+
   document.addEventListener('DOMContentLoaded', async () => {
     const sesion = await ensureSession();
     document.querySelectorAll('[data-auth-mount]').forEach((el) => render(el, sesion));
     window.dispatchEvent(new CustomEvent('authchange', { detail: sesion }));
+    manejarErrorDeOAuthSiVuelveDeGoogle();
   });
 })();
