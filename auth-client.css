@@ -16,11 +16,11 @@
 [hidden] { display: none !important; }
 
 .au-modal {
-  border: none;
-  border-radius: var(--r-lg, 16px);
+  border: var(--line);
+  border-radius: var(--r-lg);
   padding: 28px;
   width: min(380px, 92vw);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, .18);
+  box-shadow: var(--shadow);
 }
 .au-modal::backdrop {
   background: rgba(20, 18, 14, .45);
@@ -31,14 +31,14 @@
 .au-modal-tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: var(--line); }
 .au-tab {
   flex: 1; background: none; border: none; padding: 10px 4px; cursor: pointer;
-  font-weight: 600; font-size: .9rem; color: var(--ink-60, #8a8378);
+  font-weight: 600; font-size: .9rem; color: var(--ink-60);
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .au-tab.is-active { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
 
 .au-modal-body { display: flex; flex-direction: column; gap: 14px; }
-.au-divider { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--ink-60, #8a8378); }
-.au-divider::before, .au-divider::after { content: ''; flex: 1; height: 1px; background: var(--line-color, #e6e1d8); }
+.au-divider { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--ink-60); }
+.au-divider::before, .au-divider::after { content: ''; flex: 1; height: 1px; background: var(--ink-15); }
 
 .au-form { display: flex; flex-direction: column; gap: 12px; }
 .au-error { font-size: .85rem; }
@@ -53,21 +53,22 @@
 .au-account-menu {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
   background: var(--paper); border: var(--line); border-radius: var(--r-md);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .12);
+  box-shadow: var(--shadow-sm);
   min-width: 160px; padding: 6px;
 }
 .au-account-menu-item {
   display: block; width: 100%; text-align: left; background: none; border: none;
   padding: 10px 12px; border-radius: var(--r-md); cursor: pointer; font-size: .9rem; color: var(--ink);
+  text-decoration: none; box-sizing: border-box;
 }
 .au-account-menu-item:hover { background: rgba(0, 0, 0, .05); }
 .au-account-menu-item[disabled] {
-  cursor: default; color: var(--ink-40, #b3ab9d);
+  cursor: default; color: var(--ink-40);
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .au-account-menu-item[disabled]:hover { background: none; }
-.au-soon { font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-40, #b3ab9d); }
-.au-account-menu-sep { height: 1px; background: var(--line-color, #e6e1d8); margin: 6px 4px; }
+.au-soon { font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-40); }
+.au-account-menu-sep { height: 1px; background: var(--ink-15); margin: 6px 4px; }
 
 @media (max-width: 900px) {
   /* Mismo criterio mobile-first que el resto del rediseño (sección 5 del

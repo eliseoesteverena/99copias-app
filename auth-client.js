@@ -303,12 +303,12 @@
       <div class="au-account">
         <button type="button" class="btn btn-sm btn-outline au-account-btn">${nombre}</button>
         <div class="au-account-menu" hidden>
-          <button type="button" class="au-account-menu-item" disabled title="Todavía no está disponible">
-            Mis pedidos <span class="au-soon">Próximamente</span>
-          </button>
+          <a href="/mis-pedidos/" class="au-account-menu-item">Mis pedidos</a>
           <button type="button" class="au-account-menu-item" disabled title="Todavía no está disponible">
             Mis opciones de entrega <span class="au-soon">Próximamente</span>
           </button>
+          <div class="au-account-menu-sep"></div>
+          <button type="button" class="au-account-menu-item au-notif-toggle" data-estado="cargando">Notificaciones…</button>
           <div class="au-account-menu-sep"></div>
           <button type="button" class="au-account-menu-item au-logout">Cerrar sesión</button>
         </div>
@@ -322,6 +322,50 @@
       await signOut();
       await refrescarMontajes();
     });
+
+    // Toggle de notificaciones (Fase 4) — requiere push-client.js cargado en
+    // la página (hub + los dos wizards). Si no está, se deshabilita en vez
+    // de romper.
+    const notifBtn = container.querySelector('.au-notif-toggle');
+    if (notifBtn) {
+      if (window.PushClient) {
+        window.PushClient.estadoActual().then((estado) => actualizarBotonNotif(notifBtn, estado));
+        notifBtn.addEventListener('click', async () => {
+          const estadoPrevio = notifBtn.dataset.estado;
+          try {
+            if (estadoPrevio === 'activo') {
+              await window.PushClient.desactivar();
+              actualizarBotonNotif(notifBtn, 'no-pedido');
+            } else if (estadoPrevio === 'denegado') {
+              alert('Tenés las notificaciones bloqueadas para este sitio. Activalas desde la configuración del navegador y volvé a intentar.');
+            } else if (estadoPrevio !== 'no-soportado') {
+              await window.PushClient.activar();
+              actualizarBotonNotif(notifBtn, 'activo');
+            }
+          } catch (err) {
+            alert(err.message || 'No pudimos activar las notificaciones.');
+            actualizarBotonNotif(notifBtn, await window.PushClient.estadoActual());
+          }
+          menu.hidden = true;
+        });
+      } else {
+        notifBtn.disabled = true;
+        notifBtn.textContent = 'Notificaciones no disponibles';
+      }
+    }
+  }
+
+  function actualizarBotonNotif(btn, estado) {
+    const textos = {
+      activo: '🔔 Notificaciones activadas',
+      'permiso-sin-suscribir': 'Activar notificaciones',
+      'no-pedido': 'Activar notificaciones',
+      denegado: 'Notificaciones bloqueadas',
+      'no-soportado': 'Notificaciones no disponibles',
+    };
+    btn.dataset.estado = estado;
+    btn.textContent = textos[estado] || 'Activar notificaciones';
+    btn.disabled = estado === 'no-soportado';
   }
 
   // Un único listener global (no uno por render — si no, se acumulan cada

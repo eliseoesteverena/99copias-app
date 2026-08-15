@@ -3,6 +3,7 @@ import { sanitizarNombreArchivo } from './lib/r2.js';
 import { horasMinimasRequeridas, cumpleAnticipacion } from './lib/produccion.js';
 import { calcularEnvio } from './lib/envio.js';
 import { createAuth } from './lib/auth.js';
+import { notificarEventoTrabajo } from './lib/notificaciones.js';
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -198,6 +199,13 @@ export async function onRequestPost({ request, env }) {
     } catch {
       // silencioso, igual que antes — ver deuda documentada en PROJECT_HANDOFF.md
     }
+
+    // Fases 2-4: avisar al cliente que el pedido se creó — push si tiene
+    // activado, si no email. No se hace esperar la respuesta al cliente por
+    // esto (mismo criterio que ya se aplicaba antes de tocar este archivo,
+    // salvo por la notificación al Panel, que sí bloquea — ver PROJECT_HANDOFF.md
+    // sección 8, pendiente no resuelto acá).
+    await notificarEventoTrabajo(env, trabajoId, 'creado', {});
 
     return Response.json({ trabajo_id: trabajoId, total: totalConEnvio, subtotal_impresion: total, con_envio, costo_envio, items });
   } catch (err) {

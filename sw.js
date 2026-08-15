@@ -112,3 +112,47 @@ async function handleShareTarget(request) {
     return Response.redirect('/?share-error=1', 303);
   }
 }
+
+
+// ============================================================
+// AGREGAR a sw.js (no reemplaza nada — son listeners nuevos, "push" y
+// "notificationclick" no existían antes). Pegar al final del archivo.
+//
+// Maneja el push AL CLIENTE (Fase 4) — distinto del Web Push del Panel,
+// que es un service worker completamente aparte en otro proyecto.
+// ============================================================
+
+self.addEventListener('push', (event) => {
+  let datos = { title: '99copias', body: 'Tenés novedades de tu pedido.', url: '/mis-pedidos/' };
+  try {
+    if (event.data) datos = { ...datos, ...event.data.json() };
+  } catch (err) {
+    console.error('[sw] Push con payload no-JSON, se usa el default:', err);
+  }
+  event.waitUntil(
+    self.registration.showNotification(datos.title, {
+      body: datos.body,
+      icon: '/web-app-manifest-192x192.png', // mismo ícono que ya usa site.webmanifest
+      badge: '/web-app-manifest-192x192.png',
+      data: { url: datos.url },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/mis-pedidos/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((lista) => {
+      // Si ya hay una pestaña de la app abierta, la reusamos y navegamos ahí
+      // en vez de abrir una nueva — más prolijo si el usuario ya la tenía abierta.
+      for (const client of lista) {
+        if ('focus' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
