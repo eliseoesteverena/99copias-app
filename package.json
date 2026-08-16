@@ -5,6 +5,6 @@
   "description": "Wizard de pedidos de impresión (99copias) — hub + impresion-rapida + fotos, Cloudflare Pages Functions.",
   "dependencies": {
     "better-auth": "^1.6.26",
-    "@mmmike/web-push": "^versión_actual"
+    "@mmmike/web-push": "latest"
   }
 }
