@@ -127,20 +127,44 @@
         <div id="finalBody"></div>
         <div class="receipt-total"> <span class="label">Total a pagar</span> <span class="amount" id="finalTotal">$0</span> </div>
       </div>
-      <div class="alert alert-error" id="payError" style="display:none;"></div> <button type="button" class="btn btn-primary btn-block" id="btnPagar" style="margin-top:1rem; padding:.9rem;"> Ir a pagar con Mercado Pago → </button>
-      <div class="eyebrow" style="text-align:center; margin-top:.75rem; display:flex; align-items:center; justify-content:center; gap:.4rem;"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="5" y="11" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.8" />
-          <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-        </svg> Pago seguro </div>
-      <div id="payLaunch" style="display:none; margin-top:1.25rem;">
-        <div class="plate is-focused" style="text-align:center;">
-          <div class="eyebrow" style="margin-bottom:.9rem;">Checkout listo</div>
-          <div id="payQrBlock">
-            <p style="font-weight:600; margin-bottom:1rem;">Escaneá el código desde tu celular para pagar sin salir de esta pantalla</p> <img id="payQr" src="" alt="Código QR para pagar con Mercado Pago" width="220" height="220" style="display:block; margin:0 auto;">
-            <p class="eyebrow" style="margin-top:1rem;">— o bien —</p>
-          </div> <a id="payLink" class="btn btn-outline" href="#" style="margin-top:.5rem;">Continuar el pago en esta pestaña →</a>
-          <p class="eyebrow" style="margin-top:1.25rem;">Esta pantalla se actualiza sola apenas se acredite el pago — no hace falta que vuelvas ni recargues.</p>
+      <div class="ent-toggle" id="medioPagoToggle" style="margin-bottom:1rem;">
+        <button type="button" data-medio="mercadopago" class="is-on">Mercado Pago</button>
+        <button type="button" data-medio="transferencia">Transferencia</button>
+      </div>
+
+      <div id="bloqueMercadoPago">
+        <div class="alert alert-error" id="payError" style="display:none;"></div> <button type="button" class="btn btn-primary btn-block" id="btnPagar" style="margin-top:1rem; padding:.9rem;"> Ir a pagar con Mercado Pago → </button>
+        <div class="eyebrow" style="text-align:center; margin-top:.75rem; display:flex; align-items:center; justify-content:center; gap:.4rem;"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.8" />
+            <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg> Pago seguro </div>
+        <div id="payLaunch" style="display:none; margin-top:1.25rem;">
+          <div class="plate is-focused" style="text-align:center;">
+            <div class="eyebrow" style="margin-bottom:.9rem;">Checkout listo</div>
+            <div id="payQrBlock">
+              <p style="font-weight:600; margin-bottom:1rem;">Escaneá el código desde tu celular para pagar sin salir de esta pantalla</p> <img id="payQr" src="" alt="Código QR para pagar con Mercado Pago" width="220" height="220" style="display:block; margin:0 auto;">
+              <p class="eyebrow" style="margin-top:1rem;">— o bien —</p>
+            </div> <a id="payLink" class="btn btn-outline" href="#" style="margin-top:.5rem;">Continuar el pago en esta pestaña →</a>
+            <p class="eyebrow" style="margin-top:1.25rem;">Esta pantalla se actualiza sola apenas se acredite el pago — no hace falta que vuelvas ni recargues.</p>
+          </div>
         </div>
+      </div>
+
+      <div id="bloqueTransferencia" hidden>
+        <div class="plate">
+          <p class="eyebrow" style="margin:0 0 .6rem;">Datos para transferir</p>
+          <div style="font-size:.92rem; line-height:1.7;">
+            <div><strong>CBU:</strong> [completar]</div>
+            <div><strong>Alias:</strong> [completar]</div>
+            <div><strong>Titular:</strong> [completar]</div>
+          </div>
+        </div>
+        <div class="alert alert-error" id="transError" style="display:none;"></div>
+        <label class="dropzone" id="transDropzone" style="padding:1.25rem; margin-top:1rem;">
+          <input type="file" id="transComprobanteInput" accept="image/*,application/pdf">
+          <span class="dz-title" id="transDropzoneLabel" style="font-size:.9rem;">Subir comprobante (opcional ahora, lo podés hacer después desde "Mis pedidos")</span>
+        </label>
+        <button type="button" class="btn btn-primary btn-block" id="btnConfirmarTransferencia" style="margin-top:1rem; padding:.9rem;"> Confirmar pedido → </button>
       </div>
     </section>
 
@@ -159,7 +183,7 @@
   <!-- ================= NAV INFERIOR ================= -->
   <p class="wizard-footer-note" id="uploadStatusFooter" hidden></p>
   <div class="wizard-nav"> <button type="button" class="btn btn-ghost" id="btnBack">← Atrás</button> <span class="price-peek" id="pricePeek"></span> <button type="button" class="btn btn-primary" id="btnNext">Continuar →</button></div>
-  <script src="../auth-client.js"></script>
+  <script src="../auth-client.js"></script><script src="../push-client.js"></script>
   <script src="../entrega.js"></script>
   <script src="../nav.js"></script>
   <script>

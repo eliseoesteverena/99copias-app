@@ -1102,6 +1102,24 @@ async function renderResumenFinal() {
   }
 }
 
+function armarPayloadTrabajo(resultadoEntrega) {
+  return {
+    categoria: CATEGORIA,
+    cliente: readClienteForm(),
+    zona_id: resultadoEntrega.zona.id,
+    turno_entrega_id: resultadoEntrega.turno.turno_entrega_id,
+    fecha_entrega: resultadoEntrega.fecha,
+    direccion_entrega: resultadoEntrega.direccion,
+    archivos: [...files.values()].map(entry => ({
+      nombre: entry.file.name,
+      copias: entry.settings.copias,
+      primario: entry.settings.tamano,
+      acabado: 'suelto',
+      r2_key: entry.r2Key,
+    })),
+  };
+}
+
 document.getElementById('btnPagar').addEventListener('click', async () => {
   const btn = document.getElementById('btnPagar');
   const errEl = document.getElementById('payError');
@@ -1111,21 +1129,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
   try {
     const resultadoEntrega = entrega.getResultado();
     if (!resultadoEntrega) throw new Error('Falta terminar de elegir la entrega.');
-    const payload = {
-      categoria: CATEGORIA,
-      cliente: readClienteForm(),
-      zona_id: resultadoEntrega.zona.id,
-      turno_entrega_id: resultadoEntrega.turno.turno_entrega_id,
-      fecha_entrega: resultadoEntrega.fecha,
-      direccion_entrega: resultadoEntrega.direccion,
-      archivos: [...files.values()].map(entry => ({
-        nombre: entry.file.name,
-        copias: entry.settings.copias,
-        primario: entry.settings.tamano,
-        acabado: 'suelto',
-        r2_key: entry.r2Key,
-      })),
-    };
+    const payload = armarPayloadTrabajo(resultadoEntrega);
     const { trabajo_id } = await apiPost('/api/trabajos', payload);
     const { init_point } = await apiPost('/api/checkout', { trabajo_id });
     localStorage.setItem(LS_CLIENTE, JSON.stringify(payload.cliente));
@@ -1152,6 +1156,65 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
     errEl.style.display = 'flex';
     if (window.AuthClient) window.AuthClient.setCargando(btn, false);
     else { btn.disabled = false; btn.textContent = 'Ir a pagar con Mercado Pago →'; }
+  }
+});
+
+/* ---------- Transferencia (Fase 3) ---------- */
+let comprobanteSeleccionado = null;
+
+document.querySelectorAll('#medioPagoToggle button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#medioPagoToggle button').forEach((b) => b.classList.toggle('is-on', b === btn));
+    const esTransferencia = btn.dataset.medio === 'transferencia';
+    document.getElementById('bloqueMercadoPago').hidden = esTransferencia;
+    document.getElementById('bloqueTransferencia').hidden = !esTransferencia;
+  });
+});
+
+document.getElementById('transComprobanteInput').addEventListener('change', (e) => {
+  comprobanteSeleccionado = e.target.files[0] || null;
+  const label = document.getElementById('transDropzoneLabel');
+  label.textContent = comprobanteSeleccionado
+    ? `Seleccionado: ${comprobanteSeleccionado.name}`
+    : 'Subir comprobante (opcional ahora, lo podés hacer después desde "Mis pedidos")';
+});
+
+document.getElementById('btnConfirmarTransferencia').addEventListener('click', async () => {
+  const btn = document.getElementById('btnConfirmarTransferencia');
+  const errEl = document.getElementById('transError');
+  errEl.style.display = 'none';
+  if (window.AuthClient) window.AuthClient.setCargando(btn, true, 'Confirmando pedido…');
+  else { btn.disabled = true; btn.textContent = 'Confirmando pedido…'; }
+  try {
+    const resultadoEntrega = entrega.getResultado();
+    if (!resultadoEntrega) throw new Error('Falta terminar de elegir la entrega.');
+    const payload = armarPayloadTrabajo(resultadoEntrega);
+    const { trabajo_id } = await apiPost('/api/trabajos', payload);
+    await apiPost('/api/pago-transferencia', { trabajo_id });
+
+    if (comprobanteSeleccionado) {
+      const qs = new URLSearchParams({ trabajo_id, nombre: comprobanteSeleccionado.name });
+      const res = await fetch('/api/comprobante?' + qs.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': comprobanteSeleccionado.type || 'application/octet-stream' },
+        body: comprobanteSeleccionado,
+      });
+      if (!res.ok) {
+        console.error('No se pudo subir el comprobante en el momento — queda pendiente en Mis pedidos.');
+      }
+    }
+
+    localStorage.setItem(LS_CLIENTE, JSON.stringify(payload.cliente));
+    if (!resultadoEntrega.zona.es_retiro) localStorage.setItem(LS_DIRECCION, payload.direccion_entrega);
+
+    window.location.href = window.location.origin + window.location.pathname
+      + '?estado=pendiente&trabajo=' + trabajo_id;
+  } catch (err) {
+    console.error(err);
+    errEl.textContent = err.message || 'No pudimos confirmar el pedido. Intentá de nuevo.';
+    errEl.style.display = 'flex';
+    if (window.AuthClient) window.AuthClient.setCargando(btn, false);
+    else { btn.disabled = false; btn.textContent = 'Confirmar pedido →'; }
   }
 });
 

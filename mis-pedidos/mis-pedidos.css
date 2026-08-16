@@ -1,0 +1,39 @@
+/* mis-pedidos.css — sólo layout propio de esta página; el sistema de
+   estados (bordes, sombra dura, colores) reutiliza --ink/--paper/--line
+   como el resto del sitio, mismo criterio que entrega.css. */
+
+.mp-shell { max-width: 640px; margin: 0 auto; padding: 24px 20px 80px; }
+
+.mp-lista { display: flex; flex-direction: column; gap: 12px; }
+.mp-card {
+  display: block; text-align: left; width: 100%; border: var(--line);
+  border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-sm);
+  padding: 16px; cursor: pointer; transition: transform .08s ease, box-shadow .08s ease;
+}
+.mp-card:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+.mp-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.mp-card-id { font-family: monospace; font-size: .78rem; color: var(--ink-60); }
+.mp-card-total { font-weight: 700; }
+.mp-card-cat { font-family: var(--font-serif); font-size: 1.05rem; margin-top: 4px; }
+.mp-card-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.mp-card-fecha { font-size: .78rem; color: var(--ink-60); }
+
+.mp-badge {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .03em;
+  padding: 3px 9px; border-radius: 999px; border: 1.5px solid var(--ink);
+}
+.mp-badge.is-ok { background: var(--ink); color: var(--paper); }
+.mp-badge.is-warn { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+
+#detResumen .fila { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--ink-15); font-size: .92rem; }
+#detResumen .fila:last-child { border-bottom: none; }
+#detResumen .fila .k { color: var(--ink-60); }
+
+.mp-mensajes { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding: 4px 2px; }
+.mp-msg { max-width: 82%; padding: 10px 14px; border-radius: var(--r-md); border: var(--line); font-size: .9rem; }
+.mp-msg.is-cliente { align-self: flex-end; background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.mp-msg.is-operador { align-self: flex-start; background: var(--paper); }
+.mp-msg .hora { display: block; font-size: .68rem; opacity: .65; margin-top: 4px; }
+
+.mp-mensaje-form { display: flex; gap: 8px; margin-top: 12px; position: sticky; bottom: 12px; }
+.mp-mensaje-form .input { flex: 1; }

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis pedidos - 99copias</title>
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="../nav.css">
+  <link rel="stylesheet" href="../auth-client.css">
+  <link rel="stylesheet" href="../entrega.css">
+  <link rel="stylesheet" href="mis-pedidos.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <script src="../auth-client.js"></script>
+  <script src="../push-client.js"></script>
+  <script src="../nav.js"></script>
+  <script>renderNav();</script>
+
+  <div class="shell mp-shell">
+    <!-- ===== VISTA LISTA ===== -->
+    <section id="vistaLista">
+      <div class="panel-head">
+        <h2>Mis pedidos</h2>
+        <p class="sub">El historial y el estado de tus pedidos en 99copias.</p>
+      </div>
+
+      <div id="mpInvitado" class="alert alert-info" hidden>
+        Estás viendo esto como invitado — sólo vas a ver los pedidos hechos desde este mismo dispositivo/sesión.
+        <a href="#" id="mpLinkLogin">Iniciá sesión</a> para verlos desde cualquier lugar.
+      </div>
+
+      <div id="mpListaWrap"><div class="empty">Cargando…</div></div>
+    </section>
+
+    <!-- ===== VISTA DETALLE (mismo documento, se muestra/oculta) ===== -->
+    <section id="vistaDetalle" hidden>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnVolverLista">← Volver a mis pedidos</button>
+
+      <div class="panel-head">
+        <h2 id="detTitulo">Pedido</h2>
+        <p class="sub" id="detSubtitulo"></p>
+      </div>
+
+      <div class="plate" id="detResumen"></div>
+
+      <!-- Pago por transferencia pendiente: subir/reemplazar comprobante -->
+      <div class="plate" id="detTransferenciaWrap" hidden>
+        <p class="eyebrow" style="margin:0 0 .5rem;">Comprobante de transferencia</p>
+        <div id="detTransferenciaEstado"></div>
+        <label class="dropzone" id="detComprobanteDrop" style="padding:1.25rem; margin-top:.75rem;">
+          <input type="file" id="detComprobanteInput" accept="image/*,application/pdf">
+          <span class="dz-title" style="font-size:.9rem;">Subir / reemplazar comprobante</span>
+        </label>
+        <div class="alert alert-error" id="detComprobanteError" hidden></div>
+      </div>
+
+      <!-- Hilo de mensajes -->
+      <div class="panel-head" style="margin-top:2rem;">
+        <h3 style="font-family:var(--font-serif); font-size:1.1rem;">Mensajes</h3>
+      </div>
+      <div id="detMensajes" class="mp-mensajes"><div class="empty">Cargando…</div></div>
+      <form id="detMensajeForm" class="mp-mensaje-form">
+        <input class="input" type="text" id="detMensajeInput" placeholder="Escribí un mensaje..." maxlength="2000">
+        <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
+      </form>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
