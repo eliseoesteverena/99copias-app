@@ -19,54 +19,73 @@
   <script src="../nav.js"></script>
   <script>renderNav();</script>
 
-  <div class="shell mp-shell">
-    <!-- ===== VISTA LISTA ===== -->
-    <section id="vistaLista">
-      <div class="panel-head">
-        <h2>Mis pedidos</h2>
-        <p class="sub">El historial y el estado de tus pedidos en 99copias.</p>
+  <!-- ===== VISTA LISTA (scroll normal de página) ===== -->
+  <div class="mp-shell" id="vistaLista">
+    <div class="panel-head">
+      <h2>Mis pedidos</h2>
+      <p class="sub">El historial y el estado de tus pedidos en 99copias.</p>
+    </div>
+
+    <div id="mpInvitado" class="alert alert-info" hidden>
+      Estás viendo esto como invitado — sólo vas a ver los pedidos hechos desde este mismo dispositivo/sesión.
+      <a href="#" id="mpLinkLogin">Iniciá sesión</a> para verlos desde cualquier lugar.
+    </div>
+
+    <div id="mpListaWrap"><div class="empty">Cargando…</div></div>
+  </div>
+
+  <!-- ===== VISTA DETALLE (alto = viewport, sólo el panel activo scrollea) ===== -->
+  <div class="mp-detalle" id="vistaDetalle" hidden>
+    <div class="mp-detalle-header">
+      <button type="button" class="mp-back" id="btnVolverLista">
+        <svg viewBox="0 0 24 24" fill="none" width="20" height="20" aria-hidden="true">
+          <path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span>Volver</span>
+      </button>
+      <div class="mp-detalle-tabs">
+        <button type="button" data-tab="detalles" class="is-on">Detalles</button>
+        <button type="button" data-tab="mensajes">Mensajes</button>
       </div>
+    </div>
 
-      <div id="mpInvitado" class="alert alert-info" hidden>
-        Estás viendo esto como invitado — sólo vas a ver los pedidos hechos desde este mismo dispositivo/sesión.
-        <a href="#" id="mpLinkLogin">Iniciá sesión</a> para verlos desde cualquier lugar.
-      </div>
-
-      <div id="mpListaWrap"><div class="empty">Cargando…</div></div>
-    </section>
-
-    <!-- ===== VISTA DETALLE (mismo documento, se muestra/oculta) ===== -->
-    <section id="vistaDetalle" hidden>
-      <button type="button" class="btn btn-ghost btn-sm" id="btnVolverLista">← Volver a mis pedidos</button>
-
-      <div class="panel-head">
-        <h2 id="detTitulo">Pedido</h2>
+    <div class="mp-detalle-body">
+      <!-- ---- Tab: Detalles ---- -->
+      <div class="mp-tab-panel" id="tabPanelDetalles">
+        <h2 id="detTitulo" class="mp-det-titulo">Pedido</h2>
         <p class="sub" id="detSubtitulo"></p>
+        <div class="plate mp-plate-suave" id="detResumen"></div>
+
+        <div class="mp-seccion">
+          <p class="eyebrow">Archivos</p>
+          <div id="detArchivos" class="mp-archivos"><div class="empty">Cargando…</div></div>
+        </div>
+
+        <div class="mp-seccion" id="detTransferenciaWrap" hidden>
+          <p class="eyebrow">Comprobante de transferencia</p>
+          <div id="detTransferenciaEstado"></div>
+          <label class="dropzone" id="detComprobanteDrop" style="padding:1rem; margin-top:.6rem;">
+            <input type="file" id="detComprobanteInput" accept="image/*,application/pdf">
+            <span class="dz-title" style="font-size:.85rem;">Subir / reemplazar comprobante</span>
+          </label>
+          <div class="alert alert-error" id="detComprobanteError" hidden></div>
+        </div>
       </div>
 
-      <div class="plate" id="detResumen"></div>
-
-      <!-- Pago por transferencia pendiente: subir/reemplazar comprobante -->
-      <div class="plate" id="detTransferenciaWrap" hidden>
-        <p class="eyebrow" style="margin:0 0 .5rem;">Comprobante de transferencia</p>
-        <div id="detTransferenciaEstado"></div>
-        <label class="dropzone" id="detComprobanteDrop" style="padding:1.25rem; margin-top:.75rem;">
-          <input type="file" id="detComprobanteInput" accept="image/*,application/pdf">
-          <span class="dz-title" style="font-size:.9rem;">Subir / reemplazar comprobante</span>
-        </label>
-        <div class="alert alert-error" id="detComprobanteError" hidden></div>
+      <!-- ---- Tab: Mensajes ---- -->
+      <div class="mp-tab-panel" id="tabPanelMensajes" hidden>
+        <div id="detMensajes" class="mp-mensajes"><div class="empty">Cargando…</div></div>
+        <form id="detMensajeForm" class="mp-mensaje-form">
+          <textarea id="detMensajeInput" class="mp-mensaje-textarea" rows="1" placeholder="Escribí un mensaje..." maxlength="2000"></textarea>
+          <button type="submit" class="mp-mensaje-send" aria-label="Enviar mensaje">
+            <svg viewBox="0 0 24 24" fill="none" width="19" height="19" aria-hidden="true">
+              <line x1="21" y1="3" x2="10" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <polygon points="21 3 14 21 10 14 3 10 21 3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
+          </button>
+        </form>
       </div>
-
-      <!-- Hilo de mensajes -->
-      <div class="panel-head" style="margin-top:2rem;">
-        <h3 style="font-family:var(--font-serif); font-size:1.1rem;">Mensajes</h3>
-      </div>
-      <div id="detMensajes" class="mp-mensajes"><div class="empty">Cargando…</div></div>
-      <form id="detMensajeForm" class="mp-mensaje-form">
-        <input class="input" type="text" id="detMensajeInput" placeholder="Escribí un mensaje..." maxlength="2000">
-        <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
-      </form>
-    </section>
+    </div>
   </div>
 
   <script src="app.js"></script>

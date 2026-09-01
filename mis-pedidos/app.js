@@ -1,6 +1,5 @@
-/* mis-pedidos/app.js — Fase 2 (lista/detalle) + Fase 3 (comprobante) +
-   Fase 4 (mensajes), todo en una sola página sin router — se alterna entre
-   #vistaLista y #vistaDetalle mostrando/ocultando. */
+/* mis-pedidos/app.js — Fase 2 (lista/detalle) + Fase 3 (comprobante,
+   fusionado dentro de la tab Detalles) + Fase 4 (mensajes, tab aparte). */
 
 async function apiGet(url) {
   const res = await fetch(url, { credentials: 'include' });
@@ -37,17 +36,21 @@ function horaCorta(iso) {
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
+function truncarTexto(s, max) {
+  s = s || '';
+  return s.length <= max ? s : s.slice(0, max - 1) + '…';
+}
 
 const ESTADO_LABEL = { pendiente: 'Pendiente', en_proceso: 'En proceso', listo: 'Listo', entregado: 'Entregado' };
 
 function badgeEstado(trabajo) {
   if (trabajo.pago_medio === 'transferencia' && trabajo.pago_estado_revision === 'pendiente') {
-    return '<span class="mp-badge is-warn">Comprobante en revisión</span>';
+    return '<span class="mp-badge">Comprobante en revisión</span>';
   }
   if (trabajo.pago_medio === 'transferencia' && trabajo.pago_estado_revision === 'rechazado') {
-    return '<span class="mp-badge is-warn">Comprobante rechazado</span>';
+    return '<span class="mp-badge">Comprobante rechazado</span>';
   }
-  if (!trabajo.pagado) return '<span class="mp-badge is-warn">Pago pendiente</span>';
+  if (!trabajo.pagado) return '<span class="mp-badge">Pago pendiente</span>';
   return `<span class="mp-badge ${trabajo.estado === 'entregado' ? 'is-ok' : ''}">${ESTADO_LABEL[trabajo.estado] || trabajo.estado}</span>`;
 }
 
@@ -95,15 +98,30 @@ document.getElementById('mpLinkLogin').addEventListener('click', (e) => {
 
 /* ================= VISTA DETALLE ================= */
 let trabajoActualId = null;
+let tabActiva = 'detalles';
+
+document.querySelectorAll('.mp-detalle-tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
+});
+function cambiarTab(tab) {
+  tabActiva = tab;
+  document.querySelectorAll('.mp-detalle-tabs button').forEach((b) => b.classList.toggle('is-on', b.dataset.tab === tab));
+  document.getElementById('tabPanelDetalles').hidden = tab !== 'detalles';
+  document.getElementById('tabPanelMensajes').hidden = tab !== 'mensajes';
+  if (tab === 'mensajes') {
+    const cont = document.getElementById('detMensajes');
+    cont.scrollTop = cont.scrollHeight;
+  }
+}
 
 async function abrirDetalle(id) {
   trabajoActualId = id;
   document.getElementById('vistaLista').hidden = true;
   document.getElementById('vistaDetalle').hidden = false;
+  cambiarTab('detalles');
   const url = new URL(location.href);
   url.searchParams.set('trabajo', id);
   history.replaceState(null, '', url.toString());
-  window.scrollTo({ top: 0 });
 
   document.getElementById('detResumen').innerHTML = '<div class="empty">Cargando…</div>';
   document.getElementById('detTransferenciaWrap').hidden = true;
@@ -127,6 +145,10 @@ async function cargarDetalleTrabajo(id) {
       .map(([k, v]) => `<div class="fila"><span class="k">${k}</span><span>${v}</span></div>`)
       .join('');
 
+    renderArchivos(t);
+
+    // Comprobante fusionado dentro de la misma tab Detalles (no una tarjeta
+    // aparte flotando) — sólo visible si el medio es transferencia.
     const wrapTransferencia = document.getElementById('detTransferenciaWrap');
     if (t.pago_medio === 'transferencia' && t.pago_estado_revision !== 'aprobado') {
       wrapTransferencia.hidden = false;
@@ -143,6 +165,27 @@ async function cargarDetalleTrabajo(id) {
     console.error(err);
     document.getElementById('detResumen').innerHTML = `<div class="empty">No pudimos cargar el pedido. ${err.message || ''}</div>`;
   }
+}
+
+function renderArchivos(t) {
+  const cont = document.getElementById('detArchivos');
+  const archivos = (t.configuracion && t.configuracion.archivos) || [];
+  if (!archivos.length) {
+    cont.innerHTML = '<div class="empty">Sin archivos.</div>';
+    return;
+  }
+  cont.innerHTML = archivos.map((a) => {
+    const detalles = [];
+    if (a.copias) detalles.push(`${a.copias} ${a.copias === 1 ? 'copia' : 'copias'}`);
+    if (a.rango) detalles.push(`pág. ${a.rango}`);
+    if (a.faz) detalles.push(a.faz === 'doble' ? 'doble faz' : 'simple faz');
+    if (a.paginas_por_carilla > 1) detalles.push(`${a.paginas_por_carilla} pág/carilla`);
+    if (a.acabado && a.acabado !== 'suelto') detalles.push(a.acabado);
+    return `<div class="mp-archivo-row">
+      <span class="mp-archivo-nombre" title="${(a.nombre || '').replace(/"/g, '&quot;')}">${truncarTexto(a.nombre || '—', 26)}</span>
+      <span class="mp-archivo-detalle">${detalles.join(' · ')}</span>
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('detComprobanteInput').addEventListener('change', async (e) => {
@@ -188,21 +231,36 @@ async function cargarMensajes(id) {
   }
 }
 
-document.getElementById('detMensajeForm').addEventListener('submit', async (e) => {
+const inputMensaje = document.getElementById('detMensajeInput');
+const formMensaje = document.getElementById('detMensajeForm');
+
+// Enter envía, Shift+Enter agrega un salto de línea — mismo criterio que
+// Slack/WhatsApp Web. El textarea tiene alto fijo con scroll propio (ver
+// CSS), no crece con el texto.
+inputMensaje.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    formMensaje.requestSubmit();
+  }
+});
+
+formMensaje.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const input = document.getElementById('detMensajeInput');
-  const texto = input.value.trim();
+  const texto = inputMensaje.value.trim();
   if (!texto || !trabajoActualId) return;
-  const btn = e.target.querySelector('button[type="submit"]');
+  const btn = formMensaje.querySelector('button[type="submit"]');
   btn.disabled = true;
   try {
     await apiPost('/api/mensajes', { trabajo_id: trabajoActualId, mensaje: texto });
-    input.value = '';
+    inputMensaje.value = '';
     await cargarMensajes(trabajoActualId);
   } catch (err) {
     alert(err.message || 'No se pudo enviar el mensaje.');
   } finally {
     btn.disabled = false;
+    // El foco no debe perderse después de enviar — se puede seguir
+    // escribiendo el próximo mensaje sin volver a tocar el campo a mano.
+    inputMensaje.focus();
   }
 });
 

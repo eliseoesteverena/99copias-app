@@ -38,7 +38,10 @@ export async function onRequestPost({ request, env }) {
       ).bind(trabajo_id).run();
     }
 
-    await notificarEventoTrabajo(env, trabajo_id, aprobado ? 'pago_aprobado' : 'pago_rechazado', { medioPago: 'transferencia' });
+    await notificarEventoTrabajo(env, trabajo_id, aprobado ? 'pago_aprobado' : 'pago_rechazado', {
+      medioPago: 'transferencia',
+      motivoRechazo: aprobado ? null : (motivo_rechazo || null),
+    });
 
     return Response.json({ ok: true });
   } catch (err) {

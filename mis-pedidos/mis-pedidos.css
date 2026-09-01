@@ -1,39 +1,114 @@
-/* mis-pedidos.css — sólo layout propio de esta página; el sistema de
-   estados (bordes, sombra dura, colores) reutiliza --ink/--paper/--line
-   como el resto del sitio, mismo criterio que entrega.css. */
+/* mis-pedidos.css
+   [Rediseño tras feedback] Esta pantalla es de cuenta/uso personal, no una
+   superficie de marketing — se baja la intensidad de marca a propósito
+   (sin el borde+sombra dura que sí tiene sentido en el wizard de compra):
+   sólo un borde gris sutil (--ink-15) y sin sombra en tarjetas/tags acá.
+   Prioridad: legibilidad y calma por sobre la firma visual del sitio. */
+
+/* --nav-height: valor real de .nav-inner{height:70px} en nav.css — no hay
+   una custom property para esto en el sistema, así que se referencia acá
+   como constante documentada (si nav.css cambia esa altura, actualizar acá). */
+:root { --mp-nav-height: 70px; }
 
 .mp-shell { max-width: 640px; margin: 0 auto; padding: 24px 20px 80px; }
 
-.mp-lista { display: flex; flex-direction: column; gap: 12px; }
+/* ---------- Vista lista ---------- */
+.mp-lista { display: flex; flex-direction: column; gap: 10px; }
 .mp-card {
-  display: block; text-align: left; width: 100%; border: var(--line);
-  border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-sm);
-  padding: 16px; cursor: pointer; transition: transform .08s ease, box-shadow .08s ease;
+  display: block; text-align: left; width: 100%;
+  border: 1px solid var(--ink-15); border-radius: var(--r-md);
+  background: var(--paper); box-shadow: none;
+  padding: 14px 16px; cursor: pointer; transition: border-color .12s ease;
 }
-.mp-card:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+.mp-card:hover { border-color: var(--ink-40); }
 .mp-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.mp-card-id { font-family: monospace; font-size: .78rem; color: var(--ink-60); }
+.mp-card-id { font-family: monospace; font-size: .76rem; color: var(--ink-40); }
 .mp-card-total { font-weight: 700; }
-.mp-card-cat { font-family: var(--font-serif); font-size: 1.05rem; margin-top: 4px; }
-.mp-card-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-.mp-card-fecha { font-size: .78rem; color: var(--ink-60); }
+.mp-card-cat { font-family: var(--font-serif); font-size: 1.02rem; margin-top: 3px; }
+.mp-card-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.mp-card-fecha { font-size: .76rem; color: var(--ink-40); }
 
 .mp-badge {
-  font-size: .7rem; text-transform: uppercase; letter-spacing: .03em;
-  padding: 3px 9px; border-radius: 999px; border: 1.5px solid var(--ink);
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+  padding: 4px 10px; border-radius: 999px; border: none;
+  background: var(--ink-15); color: var(--ink-60); font-weight: 600;
 }
 .mp-badge.is-ok { background: var(--ink); color: var(--paper); }
-.mp-badge.is-warn { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
 
-#detResumen .fila { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--ink-15); font-size: .92rem; }
+/* ---------- Vista detalle — alto fijo al viewport, sólo el panel activo
+   scrollea (no la página entera). ---------- */
+.mp-detalle {
+  display: flex; flex-direction: column;
+  height: calc(100dvh - var(--mp-nav-height));
+  max-width: 640px; margin: 0 auto; padding: 0 20px;
+}
+.mp-detalle-header {
+  flex: 0 0 auto; padding-top: 12px; background: var(--paper);
+}
+.mp-back {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  background: none; border: none; cursor: pointer; color: var(--ink); padding: 2px 0 6px;
+}
+.mp-back span { font-size: .74rem; color: var(--ink-60); }
+
+.mp-detalle-tabs { display: flex; margin-top: 8px; border-bottom: var(--line); }
+.mp-detalle-tabs button {
+  flex: 1; background: none; border: none; cursor: pointer; padding: 10px 4px;
+  font-size: .92rem; color: var(--ink-60); border-bottom: 2px solid transparent;
+  margin-bottom: -1px; transition: color .12s ease, border-color .12s ease;
+}
+.mp-detalle-tabs button.is-on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+
+.mp-detalle-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.mp-tab-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+#tabPanelDetalles { overflow-y: auto; padding: 16px 0 24px; }
+.mp-det-titulo { font-size: 1.3rem; margin: 0; }
+
+.mp-plate-suave {
+  border: 1px solid var(--ink-15); box-shadow: none; border-radius: var(--r-md);
+  background: var(--paper); padding: 14px 16px; margin-top: 14px;
+}
+#detResumen .fila { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--ink-15); font-size: .9rem; gap: 12px; }
 #detResumen .fila:last-child { border-bottom: none; }
-#detResumen .fila .k { color: var(--ink-60); }
+#detResumen .fila .k { color: var(--ink-60); flex-shrink: 0; }
+#detResumen .fila span:last-child { text-align: right; }
 
-.mp-mensajes { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding: 4px 2px; }
-.mp-msg { max-width: 82%; padding: 10px 14px; border-radius: var(--r-md); border: var(--line); font-size: .9rem; }
-.mp-msg.is-cliente { align-self: flex-end; background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.mp-msg.is-operador { align-self: flex-start; background: var(--paper); }
-.mp-msg .hora { display: block; font-size: .68rem; opacity: .65; margin-top: 4px; }
+.mp-seccion { margin-top: 20px; }
+.mp-archivos { display: flex; flex-direction: column; gap: 8px; }
+.mp-archivo-row {
+  border: 1px solid var(--ink-15); border-radius: var(--r-md); padding: 10px 12px;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: .86rem;
+}
+.mp-archivo-nombre { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-archivo-detalle { color: var(--ink-60); font-size: .8rem; text-align: right; flex-shrink: 0; }
 
-.mp-mensaje-form { display: flex; gap: 8px; margin-top: 12px; position: sticky; bottom: 12px; }
-.mp-mensaje-form .input { flex: 1; }
+/* ---------- Mensajes ---------- */
+#tabPanelMensajes { overflow: hidden; padding: 14px 0 14px; gap: 10px; }
+.mp-mensajes { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
+.mp-msg { max-width: 82%; padding: 9px 13px; border-radius: var(--r-md); font-size: .88rem; }
+.mp-msg.is-cliente { align-self: flex-end; background: var(--ink); color: var(--paper); }
+.mp-msg.is-operador { align-self: flex-start; background: var(--ink-15); color: var(--ink); }
+.mp-msg .hora { display: block; font-size: .66rem; opacity: .7; margin-top: 3px; }
+
+.mp-mensaje-form {
+  flex: 0 0 auto; display: flex; align-items: flex-end; gap: 6px; width: 100%;
+  border: 1px solid var(--ink-15); border-radius: var(--r-lg); background: var(--paper);
+  padding: 6px 6px 6px 14px;
+}
+.mp-mensaje-textarea {
+  flex: 1; border: none; outline: none; resize: none; background: none; font: inherit;
+  height: 22px; max-height: 22px; line-height: 1.3; padding: 8px 0;
+  overflow-y: auto; scrollbar-width: none; /* Firefox */
+}
+.mp-mensaje-textarea::-webkit-scrollbar { display: none; } /* Chrome/Safari — scroll invisible pero funcional */
+.mp-mensaje-send {
+  flex-shrink: 0; border: none; background: var(--ink); color: var(--paper);
+  width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; cursor: pointer;
+}
+.mp-mensaje-send:disabled { opacity: .4; cursor: default; }
+
+@media (max-width: 900px) {
+  .mp-card { padding: 12px 14px; }
+}
