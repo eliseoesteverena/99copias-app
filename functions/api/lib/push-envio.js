@@ -1,4 +1,4 @@
-// functions/api/lib/push-cliente.js
+// functions/api/lib/push-envio.js
 //
 // Envío de Web Push AL CLIENTE — separado del push del Panel (que es sólo
 // para avisarte a vos de pedidos nuevos, con sus propias claves VAPID y su
