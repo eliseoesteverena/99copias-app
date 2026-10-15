@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-AR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>99copias — Impresión rápida y Fotos</title>
 <meta name="description" content="Subí tus archivos y elegí cómo querés imprimirlos: impresión rápida de documentos o revelado de fotos.">
+<meta name="robots" content="noindex, follow">
 <link rel="manifest" href="/site.webmanifest">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#ffffff">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="preload" href="/fonts/fraunces-latin-opsz.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
 <link rel="stylesheet" href="/auth-client.css">
 <style>
+  @font-face{ font-family:'Fraunces'; font-style:normal; font-weight:100 900; font-display:swap; src:url('/fonts/fraunces-latin-opsz.woff2') format('woff2'); }
   /* Estilos propios del hub — todo lo demás viene de styles.css */
   header {
     display:flex;
@@ -374,10 +374,10 @@
 
   <p class="hub-foot mono">99copias</p>
   <div class="hub-foot mono politicas">
-  <a href="https://99copias.com.ar/proteccion-de-datos.html" target="_blank">Protección de datos</a>
-  <a href="https://99copias.com.ar/terminos-y-condiciones.html" target="_blank">Términos y Condiciones</a>
+  <a href="https://99copias.com.ar/proteccion-de-datos" target="_blank" rel="noopener">Protección de datos</a>
+  <a href="https://99copias.com.ar/terminos-y-condiciones" target="_blank" rel="noopener">Términos y Condiciones</a>
   
-<a href="https://99copias.com.ar/politicas-de-privacidad.html"  target="_blank">Politica de Privacidad</a></div>
+<a href="https://99copias.com.ar/politicas-de-privacidad" target="_blank" rel="noopener">Politica de Privacidad</a></div>
 
 </div>
 
@@ -470,7 +470,95 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+/* ---------------------------------------------------------
+   Receptor del cotizador (https://99copias.com.ar/cotizador-impresiones).
+   La web abre esta app con ?origen=cotizador. Apenas escuchamos, avisamos
+   {type:'99copias:listo'} y la web nos manda {type:'99copias:archivos', files, meta}.
+   Guardamos los archivos en el MISMO Cache API y con el MISMO formato que sw.js
+   (cache 'share-target-temp', '/file-N-nombre' y '/shared-files-index') y seguimos
+   el flujo normal: directo al wizard si el cotizador ya sabe cuál, o al chooser.
+   --------------------------------------------------------- */
+const ORIGEN_COTIZADOR = 'https://99copias.com.ar';
+const COT_MAX_ARCHIVOS = 50;
+const COT_MAX_BYTES = 200 * 1024 * 1024;
+
+async function guardarArchivosCompartidos(files) {
+  const cache = await caches.open(SHARE_CACHE);
+  const keys = await cache.keys();
+  await Promise.all(
+    keys.filter((k) => !k.url.endsWith('share-target-debug')).map((k) => cache.delete(k))
+  );
+  const index = await Promise.all(
+    files.map(async (file, i) => {
+      const key = `/file-${i}-${encodeURIComponent(file.name || 'archivo')}`;
+      await cache.put(key, new Response(file));
+      return {
+        key,
+        name: file.name || `archivo-${i + 1}`,
+        type: file.type || '',
+        size: file.size,
+        lastModified: file.lastModified || Date.now(),
+      };
+    })
+  );
+  await cache.put(
+    '/shared-files-index',
+    new Response(JSON.stringify({ title: '', text: '', files: index }), {
+      headers: { 'content-type': 'application/json' },
+    })
+  );
+}
+
+function initReceptorCotizador() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('origen') !== 'cotizador') return;
+  if (!window.opener || !('caches' in window)) return;
+
+  document.getElementById('headEyebrow').textContent = 'Desde el cotizador';
+  document.getElementById('headSub').textContent = 'Estamos recibiendo tus archivos…';
+
+  window.addEventListener('message', async (e) => {
+    if (e.origin !== ORIGEN_COTIZADOR) return;
+    const d = e.data;
+    if (!d || d.type !== '99copias:archivos' || !Array.isArray(d.files)) return;
+
+    const validos = d.files.filter(
+      (f) =>
+        f instanceof File &&
+        (f.type === 'application/pdf' ||
+          (f.type || '').startsWith('image/') ||
+          /\.(pdf|jpe?g|png|webp|heic|heif)$/i.test(f.name))
+    );
+    const bytes = validos.reduce((a, f) => a + f.size, 0);
+    if (!validos.length || validos.length > COT_MAX_ARCHIVOS || bytes > COT_MAX_BYTES) {
+      document.getElementById('headSub').textContent =
+        'No pudimos recibir esos archivos. Subilos desde la opción que elijas abajo.';
+      return;
+    }
+
+    try {
+      await guardarArchivosCompartidos(validos);
+    } catch (err) {
+      document.getElementById('headSub').textContent =
+        'No pudimos recibir esos archivos. Subilos desde la opción que elijas abajo.';
+      return;
+    }
+
+    const tipo = d.meta && d.meta.tipo;
+    const soloImagenes = validos.every((f) => (f.type || '').startsWith('image/'));
+    const destino =
+      tipo === 'fotos' && soloImagenes ? '/fotos/?share-target=1'
+      : tipo === 'pdf' ? '/impresion-rapida/?share-target=1'
+      : '/?from=share-target';
+    location.replace(destino);
+  });
+
+  // el listener ya está puesto: ahora sí avisamos que estamos listos
+  window.opener.postMessage({ type: '99copias:listo' }, ORIGEN_COTIZADOR);
+}
+
 initShareMode();
+initReceptorCotizador();
 </script>
 
 </body>

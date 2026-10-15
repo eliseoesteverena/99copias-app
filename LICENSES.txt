@@ -1,0 +1,7 @@
+Fuentes alojadas en este sitio (subconjunto latino, fuente variable), obtenidas de Fontsource (https://fontsource.org):
+
+- Fraunces (eje de tamaño óptico y peso) - SIL Open Font License 1.1
+- Inter - SIL Open Font License 1.1
+- Geist y Geist Mono (Vercel) - SIL Open Font License 1.1
+
+Las licencias completas están en los paquetes @fontsource-variable/* de npm.
