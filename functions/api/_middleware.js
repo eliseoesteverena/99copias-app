@@ -10,7 +10,7 @@ const ORIGENES_PERMITIDOS = [
   // 'https://tu-proyecto.pages.dev', // descomentá para probar en un preview
 ];
 
-const RUTAS_PUBLICAS = ['/api/zonas', '/api/turnos', '/api/turnos/dias'];
+const RUTAS_PUBLICAS = ['/api/zonas', '/api/turnos', '/api/turnos/dias', '/api/turnos/proximos'];
 
 function cabecerasCors(origin) {
   return {
