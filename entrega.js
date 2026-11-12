@@ -369,7 +369,7 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
       d.setDate(hoy.getDate() + i);
       if (state.diasConTurno && !state.diasConTurno.includes(d.getDay())) continue;
       algunDiaMostrado = true;
-      const iso = d.toISOString().slice(0, 10);
+      const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'ent-opt ent-opt--chip' + (state.fecha === iso ? ' is-selected' : '');
