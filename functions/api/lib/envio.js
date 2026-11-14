@@ -1,3 +1,4 @@
+// api/lib/envio.js
 // Costo de envío: precio base de la zona, con un descuento por volumen (tramos de
 // carillas totales del pedido, por categoría) — o $0 si la zona es "retiro en local".
 // El resultado de esto SIEMPRE se recalcula server-side al confirmar el pedido y

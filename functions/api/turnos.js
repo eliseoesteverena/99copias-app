@@ -1,4 +1,4 @@
-import { horasMinimasRequeridas, cumpleAnticipacion } from './lib/produccion.js';
+import { horasMinimasPedido, parseCarga, cumpleAnticipacion } from './lib/produccion.js';
 
 export async function onRequestGet({ request, env }) {
   const url = new URL(request.url);
@@ -6,6 +6,9 @@ export async function onRequestGet({ request, env }) {
   const fecha = url.searchParams.get('fecha'); // YYYY-MM-DD
   const categoria = url.searchParams.get('categoria');
   const carillas = parseInt(url.searchParams.get('carillas') || '0', 10) || 0;
+  // Detalle por producto, formato "byn_a4:120,color_a4:30" — opcional. Sin esto rige solo la
+  // regla de categoría sobre `carillas` (comportamiento anterior).
+  const carga = parseCarga(url.searchParams.get('carga'));
 
   if (!zonaId || !fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
     return Response.json({ error: 'Faltan parámetros zona_id y/o fecha (YYYY-MM-DD).' }, { status: 400 });
@@ -15,7 +18,9 @@ export async function onRequestGet({ request, env }) {
     // 0 = domingo ... 6 = sábado, igual que en el schema.
     const diaSemana = new Date(fecha + 'T00:00:00Z').getUTCDay();
 
-    const horasMinimas = categoria ? await horasMinimasRequeridas(env.DB, categoria, carillas) : 0;
+    const horasMinimas = categoria
+      ? (await horasMinimasPedido(env.DB, categoria, carillas, carga)).horas
+      : 0;
 
     const { results: turnos } = await env.DB
       .prepare('SELECT * FROM turnos_entrega WHERE zona_id = ? AND dia_semana = ? AND activo = 1 ORDER BY hora_inicio')

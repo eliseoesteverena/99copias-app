@@ -38,6 +38,18 @@ const entrega = createEntregaStep({
     files.forEach(entry => { total += calcularFoto(entry).copias; });
     return total;
   },
+  // Cantidad por producto (tamaño = producto), para las reglas de producción por producto.
+  // 'suelto' es el acabado fijo que manda armarPayloadTrabajo(), igual que lo cuenta el servidor.
+  cargaProvider: () => {
+    const carga = {};
+    files.forEach(entry => {
+      const copias = calcularFoto(entry).copias;
+      const tamano = entry.settings.tamano;
+      if (tamano) carga[tamano] = (carga[tamano] || 0) + copias;
+      carga.suelto = (carga.suelto || 0) + copias;
+    });
+    return carga;
+  },
   onValidChange: () => updateNavState(),
 });
 

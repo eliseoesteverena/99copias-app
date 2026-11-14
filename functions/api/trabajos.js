@@ -1,6 +1,6 @@
 import { calcularPrecio } from './lib/precio.js';
 import { sanitizarNombreArchivo } from './lib/r2.js';
-import { horasMinimasRequeridas, cumpleAnticipacion } from './lib/produccion.js';
+import { horasMinimasPedido, cargaDesdeItems, cumpleAnticipacion } from './lib/produccion.js';
 import { calcularEnvio } from './lib/envio.js';
 import { createAuth } from './lib/auth.js';
 import { notificarEventoTrabajo } from './lib/notificaciones.js';
@@ -100,10 +100,17 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    const horasMinimas = await horasMinimasRequeridas(db, categoria, carillasTotal);
+    // Rige la regla más exigente: la de categoría (sobre el total del pedido) o la de
+    // cualquier producto (sobre la cantidad de ese producto) — ver lib/produccion.js.
+    const { horas: horasMinimas, origen } = await horasMinimasPedido(
+      db, categoria, carillasTotal, cargaDesdeItems(items)
+    );
     if (!cumpleAnticipacion(fecha_entrega, horaInicio, horasMinimas)) {
+      const detalle = origen
+        ? `Este pedido incluye ${origen.cantidad} × "${origen.descripcion}", que necesita`
+        : `Este pedido (${carillasTotal} carillas) necesita`;
       return Response.json({
-        error: `Este pedido (${carillasTotal} carillas) necesita al menos ${horasMinimas}hs de anticipación — elegí un turno más adelante.`,
+        error: `${detalle} al menos ${horasMinimas}hs de anticipación — elegí un turno más adelante.`,
       }, { status: 409 });
     }
 

@@ -21,6 +21,7 @@
 //     mount: document.getElementById('entregaMount'),
 //     categoria: CATEGORIA,
 //     carillasProvider: () => calcularTotalCarillas(),
+//     cargaProvider: () => ({ byn_a4: 120, anillado: 2 }), // opcional: cantidad por código de producto
 //     onValidChange: (valido) => updateNavState(),
 //   });
 //   entrega.activar();                                   // al entrar al paso
@@ -28,7 +29,7 @@
 //   entrega.esValido();
 //   entrega.getResultado(); // { zona, fecha, turno, direccion } | null
 
-function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }) {
+function createEntregaStep({ mount, categoria, carillasProvider, cargaProvider, onValidChange }) {
   const LS_ZONA_ID = 'wizard.entrega.zonaId';
   const VENTANA_DIAS_INICIAL = 7;
 
@@ -55,6 +56,22 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     n = Number(n);
     if (!Number.isFinite(n)) n = 0;
     return '$' + Math.round(n).toLocaleString('es-AR');
+  }
+
+  // Query string de GET /api/turnos. Además del total de carillas (regla de categoría), manda
+  // el detalle por producto en `carga` ("byn_a4:120,color_a4:30") para que el servidor aplique
+  // también las reglas de producción por producto. Si el wizard no pasa cargaProvider, no se
+  // manda `carga` y el servidor se comporta como antes.
+  function qsTurnos(zonaId, fecha, carillas) {
+    const params = { zona_id: zonaId, fecha, categoria, carillas };
+    if (typeof cargaProvider === 'function') {
+      const carga = cargaProvider() || {};
+      const partes = Object.entries(carga)
+        .filter(([, n]) => n > 0)
+        .map(([codigo, n]) => `${codigo}:${n}`);
+      if (partes.length) params.carga = partes.join(',');
+    }
+    return new URLSearchParams(params).toString();
   }
 
   // Mueve suavemente la sección recién revelada a la vista — evita que el
@@ -396,8 +413,7 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
     scrollIntoViewSoon('#entregaSlotSubhead');
     try {
       const carillas = typeof carillasProvider === 'function' ? carillasProvider() : 0;
-      const qs = new URLSearchParams({ zona_id: state.zona.id, fecha: iso, categoria, carillas });
-      const turnos = await apiGet('/api/turnos?' + qs.toString());
+      const turnos = await apiGet('/api/turnos?' + qsTurnos(state.zona.id, iso, carillas));
       if (!turnos.length) {
         grid.innerHTML = '<div class="empty">No hay turnos disponibles para esta fecha. Probá con otro día.</div>';
         return;
@@ -476,8 +492,7 @@ function createEntregaStep({ mount, categoria, carillasProvider, onValidChange }
         }
         await Promise.all(fechasAConsultar.map(async (iso) => {
           try {
-            const qs = new URLSearchParams({ zona_id: z.id, fecha: iso, categoria, carillas });
-            const turnos = await apiGet('/api/turnos?' + qs.toString());
+            const turnos = await apiGet('/api/turnos?' + qsTurnos(z.id, iso, carillas));
             turnos.filter((t) => t.disponible).forEach((t) => {
               filas.push({ zona: z, fecha: iso, turno: t });
             });

@@ -31,6 +31,18 @@ const entrega = createEntregaStep({
     files.forEach((entry) => { total += calcularArchivo(entry).carillas; });
     return total;
   },
+  // Cantidad por producto, para las reglas de producción por producto (mismo criterio que
+  // cargaDesdeItems() en el servidor): primario => carillas, acabado => copias.
+  cargaProvider: () => {
+    const carga = {};
+    files.forEach((entry) => {
+      const calc = calcularArchivo(entry);
+      const { primario, acabado } = entry.settings;
+      if (primario) carga[primario] = (carga[primario] || 0) + calc.carillas;
+      if (acabado) carga[acabado] = (carga[acabado] || 0) + calc.copias;
+    });
+    return carga;
+  },
   onValidChange: () => updateNavState(),
 });
 
