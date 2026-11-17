@@ -73,9 +73,11 @@ export async function onRequestPost({ request, env }) {
 
     // Turno: existencia, excepciones, cupo y tiempo mínimo de producción.
     const turno = await db.prepare(
-      'SELECT hora_inicio, capacidad_maxima FROM turnos_entrega WHERE id = ?'
+      'SELECT hora_inicio, capacidad_maxima, activo FROM turnos_entrega WHERE id = ?'
     ).bind(turno_entrega_id).first();
-    if (!turno) return Response.json({ error: 'El turno elegido ya no existe.' }, { status: 409 });
+    // Un turno eliminado o desactivado desde el Panel ya no se puede reservar, aunque el
+    // cliente haya abierto el wizard antes y todavía lo tenga en pantalla.
+    if (!turno || !turno.activo) return Response.json({ error: 'El turno elegido ya no existe.' }, { status: 409 });
 
     const excepcion = await db.prepare(
       'SELECT * FROM turnos_excepciones WHERE turno_entrega_id = ? AND fecha = ?'
