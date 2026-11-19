@@ -208,9 +208,14 @@ export async function onRequestPost({ request, env }) {
         `UPDATE trabajos SET pagado = 1, estado = CASE WHEN estado = 'pendiente' THEN 'en_proceso' ELSE estado END
          WHERE id = ?`
       ).bind(trabajoId).run();
-      await notificarEventoTrabajo(env, trabajoId, 'pago_aprobado', { medioPago: 'mercadopago' });
+      await notificarEventoTrabajo(env, Number(trabajoId), 'pago_aprobado', { medioPago: 'mercadopago' });
     } else if (pago.status === 'rejected') {
-      await notificarEventoTrabajo(env, trabajoId, 'pago_rechazado', { medioPago: 'mercadopago' });
+      // status_detail (ej. 'cc_rejected_insufficient_amount') lo traduce
+      // notificaciones.js a un motivo legible; los códigos desconocidos se omiten.
+      await notificarEventoTrabajo(env, Number(trabajoId), 'pago_rechazado', {
+        medioPago: 'mercadopago',
+        motivoRechazo: pago.status_detail || null,
+      });
     }
 
     await log(env, {

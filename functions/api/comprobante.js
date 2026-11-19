@@ -8,10 +8,11 @@
 
 import { sanitizarNombreArchivo, TAMANO_MAXIMO_BYTES } from './lib/r2.js';
 import { createAuth } from './lib/auth.js';
+import { notificarEventoTrabajo } from './lib/notificaciones.js';
 
 const TIPOS_PERMITIDOS_COMPROBANTE = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   try {
     const auth = createAuth(env);
     const sessionData = await auth.api.getSession({ headers: request.headers });
@@ -67,6 +68,12 @@ export async function onRequestPost({ request, env }) {
     if (keyPrevia && keyPrevia !== key) {
       env.BUCKET.delete(keyPrevia).catch(() => {});
     }
+
+    // Confirmación al cliente: "recibimos tu comprobante, lo estamos revisando".
+    // En segundo plano — no demora la respuesta y no puede romper la subida
+    // (notificarEventoTrabajo no lanza).
+    const aviso = notificarEventoTrabajo(env, Number(trabajoId), 'comprobante_recibido', { medioPago: 'transferencia' });
+    if (typeof waitUntil === 'function') waitUntil(aviso); else await aviso;
 
     return Response.json({ ok: true, key });
   } catch (err) {

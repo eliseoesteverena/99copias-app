@@ -1114,9 +1114,10 @@ async function renderResumenFinal() {
   }
 }
 
-function armarPayloadTrabajo(resultadoEntrega) {
+function armarPayloadTrabajo(resultadoEntrega, medioPago) {
   return {
     categoria: CATEGORIA,
+    medio_pago: medioPago, // 'mercadopago' | 'transferencia' — el servidor lo usa para el mail de "pedido recibido"
     cliente: readClienteForm(),
     zona_id: resultadoEntrega.zona.id,
     turno_entrega_id: resultadoEntrega.turno.turno_entrega_id,
@@ -1141,7 +1142,7 @@ document.getElementById('btnPagar').addEventListener('click', async () => {
   try {
     const resultadoEntrega = entrega.getResultado();
     if (!resultadoEntrega) throw new Error('Falta terminar de elegir la entrega.');
-    const payload = armarPayloadTrabajo(resultadoEntrega);
+    const payload = armarPayloadTrabajo(resultadoEntrega, 'mercadopago');
     const { trabajo_id } = await apiPost('/api/trabajos', payload);
     const { init_point } = await apiPost('/api/checkout', { trabajo_id });
     localStorage.setItem(LS_CLIENTE, JSON.stringify(payload.cliente));
@@ -1200,7 +1201,7 @@ document.getElementById('btnConfirmarTransferencia').addEventListener('click', a
   try {
     const resultadoEntrega = entrega.getResultado();
     if (!resultadoEntrega) throw new Error('Falta terminar de elegir la entrega.');
-    const payload = armarPayloadTrabajo(resultadoEntrega);
+    const payload = armarPayloadTrabajo(resultadoEntrega, 'transferencia');
     const { trabajo_id } = await apiPost('/api/trabajos', payload);
     await apiPost('/api/pago-transferencia', { trabajo_id });
 

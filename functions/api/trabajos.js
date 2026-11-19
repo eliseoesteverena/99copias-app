@@ -5,7 +5,16 @@ import { calcularEnvio } from './lib/envio.js';
 import { createAuth } from './lib/auth.js';
 import { notificarEventoTrabajo } from './lib/notificaciones.js';
 
-export async function onRequestPost({ request, env }) {
+const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// En Pages Functions el contexto SÍ trae `waitUntil` (context.waitUntil, no
+// context.ctx.waitUntil): permite seguir trabajando después de responder.
+// Si por algún motivo no está, se espera la promesa (comportamiento anterior).
+export async function onRequestPost({ request, env, waitUntil }) {
+  const enSegundoPlano = async (promesa) => {
+    if (typeof waitUntil === 'function') waitUntil(promesa);
+    else await promesa;
+  };
   try {
     // --- Sesión (Better Auth) --------------------------------------------
     // A partir de Fase 1, todo pedido cuelga de un user_id — anónimo o
@@ -28,11 +37,23 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json();
     const { cliente, zona_id, turno_entrega_id, fecha_entrega, direccion_entrega, archivos, categoria } = body;
 
+    // Medio de pago elegido en el Paso 4 del wizard. Hoy el frontend NO lo manda
+    // (decide recién al llamar a /api/checkout o /api/pago-transferencia), así
+    // que se agrega al payload — ver armarPayloadTrabajo en app.js. Sin este
+    // dato el mail de "creado" no puede decir cómo pagar. Si falta (wizard
+    // viejo, o el de fotos sin actualizar) se asume Mercado Pago.
+    const medioPago = body.medio_pago === 'transferencia' ? 'transferencia' : 'mercadopago';
+
     if (!categoria) {
       return Response.json({ error: 'Falta la categoría del pedido.' }, { status: 400 });
     }
     if (!cliente || !cliente.nombre || !cliente.apellido || !cliente.documento_numero) {
       return Response.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
+    }
+    // El frontend ya exige un email válido, pero el servidor no lo verificaba:
+    // sin esto, un pedido podía crearse sin ningún email al que avisarle.
+    if (!REGEX_EMAIL.test(String(cliente.email || '').trim())) {
+      return Response.json({ error: 'Falta un email válido para avisarte del pedido.' }, { status: 400 });
     }
     if (!zona_id || !turno_entrega_id || !fecha_entrega || !direccion_entrega) {
       return Response.json({ error: 'Faltan datos de entrega.' }, { status: 400 });
@@ -199,22 +220,26 @@ export async function onRequestPost({ request, env }) {
     // PROJECT_HANDOFF.md sección 8): sigue siendo un `await` simple sin
     // `ctx.waitUntil` (bloqueante) con catch silencioso. No se toca acá para
     // no mezclar ese pendiente ya conocido con el cambio de Fase 1.
-    try {
-      await fetch('https://99copias-panel.pages.dev/api/push/notificar-pedido', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-webhook-secret': env.PANEL_WEBHOOK_SECRET },
-        body: JSON.stringify({ trabajo_id: trabajoId }),
-      });
-    } catch {
-      // silencioso, igual que antes — ver deuda documentada en PROJECT_HANDOFF.md
-    }
+    // [Cambio] Ambos avisos (Panel y cliente) pasan a segundo plano con
+    // waitUntil: antes cada uno bloqueaba la respuesta (fetch al Panel + envío
+    // de push/email), y el cliente esperaba todo eso antes de poder ir a pagar.
+    // Los dos siguen siendo "no críticos": si fallan, el pedido ya está creado.
+    await enSegundoPlano((async () => {
+      try {
+        await fetch('https://99copias-panel.pages.dev/api/push/notificar-pedido', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-webhook-secret': env.PANEL_WEBHOOK_SECRET },
+          body: JSON.stringify({ trabajo_id: trabajoId }),
+        });
+      } catch {
+        // silencioso, igual que antes — ver deuda documentada en PROJECT_HANDOFF.md
+      }
+    })());
 
-    // Fases 2-4: avisar al cliente que el pedido se creó — push si tiene
-    // activado, si no email. No se hace esperar la respuesta al cliente por
-    // esto (mismo criterio que ya se aplicaba antes de tocar este archivo,
-    // salvo por la notificación al Panel, que sí bloquea — ver PROJECT_HANDOFF.md
-    // sección 8, pendiente no resuelto acá).
-    await notificarEventoTrabajo(env, trabajoId, 'creado', {});
+    // Aviso al cliente: push si tiene activado, si no email. medioPago permite
+    // que el mail diga cómo pagar (transferencia: datos + subir comprobante;
+    // Mercado Pago: completar el pago). notificarEventoTrabajo no lanza.
+    await enSegundoPlano(notificarEventoTrabajo(env, trabajoId, 'creado', { medioPago }));
 
     return Response.json({ trabajo_id: trabajoId, total: totalConEnvio, subtotal_impresion: total, con_envio, costo_envio, items });
   } catch (err) {
