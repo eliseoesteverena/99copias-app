@@ -450,14 +450,15 @@ async function marcarEnviado(db, trabajoId, tipoEvento, canal) {
  * Respaldo: si quien dispara el evento no pasó contexto.medioPago (ej. un
  * endpoint del Panel), se lee de pagos.medio — la fila la crea
  * pago-transferencia.js ('transferencia') o checkout.js. Cualquier valor que
- * no sea 'transferencia' (o ninguna fila todavía) se trata como Mercado Pago.
+ * no sea 'transferencia' se trata como Mercado Pago; sin fila => null (desconocido).
  */
 async function leerMedioPago(db, trabajoId) {
   try {
     const row = await db.prepare('SELECT medio FROM pagos WHERE trabajo_id = ?').bind(trabajoId).first();
-    return row && row.medio === 'transferencia' ? 'transferencia' : 'mercadopago';
+    if (!row) return null; // todavía no se eligió medio (ej. evento 'creado'): no adivinar
+    return row.medio === 'transferencia' ? 'transferencia' : 'mercadopago';
   } catch {
-    return 'mercadopago';
+    return null;
   }
 }
 

@@ -42,7 +42,9 @@ export async function onRequestPost({ request, env, waitUntil }) {
     // que se agrega al payload — ver armarPayloadTrabajo en app.js. Sin este
     // dato el mail de "creado" no puede decir cómo pagar. Si falta (wizard
     // viejo, o el de fotos sin actualizar) se asume Mercado Pago.
-    const medioPago = body.medio_pago === 'transferencia' ? 'transferencia' : 'mercadopago';
+    // Si no llega (wizard viejo o archivo sin redeployar) queda `undefined` y el
+    // mail sale con texto genérico — es preferible a afirmar un medio de pago equivocado.
+    const medioPago = ['transferencia', 'mercadopago'].includes(body.medio_pago) ? body.medio_pago : undefined;
 
     if (!categoria) {
       return Response.json({ error: 'Falta la categoría del pedido.' }, { status: 400 });
