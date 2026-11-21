@@ -494,10 +494,13 @@ export async function notificarEventoTrabajo(env, trabajoId, tipoEvento, context
     const trabajo = await db.prepare(
       'SELECT user_id FROM trabajos WHERE id = ?'
     ).bind(trabajoId).first();
-    if (!trabajo || !trabajo.user_id) {
-      console.error('[notificaciones] trabajo sin user_id, no se notifica:', trabajoId, tipoEvento);
+    if (!trabajo) {
+      console.error('[notificaciones] trabajo inexistente, no se notifica:', trabajoId, tipoEvento);
       return;
     }
+    // Pedido cargado a mano desde el Panel sin cuenta de cliente (user_id NULL):
+    // no hay a quién notificar. No es un error.
+    if (!trabajo.user_id) return;
     const userId = trabajo.user_id;
 
     // Normalizamos el medio de pago una sola vez: de acá en más
@@ -524,11 +527,16 @@ export async function notificarEventoTrabajo(env, trabajoId, tipoEvento, context
     const perfil = await db.prepare(
       'SELECT nombre, email_contacto FROM perfil_fiscal WHERE user_id = ?'
     ).bind(userId).first();
-    const usuario = await db.prepare('SELECT email FROM "user" WHERE id = ?').bind(userId).first();
+    // isAnonymous: columna confirmada (la usa el Panel en sus listados). El email de
+    // una cuenta anónima es un descartable inventado por Better Auth: nunca se usa.
+    const usuario = await db.prepare('SELECT email, isAnonymous FROM "user" WHERE id = ?').bind(userId).first();
 
     // Primero el email que el cliente cargó en el pedido; el del login sólo
     // como respaldo, y nunca si es el descartable de una sesión anónima.
-    const candidatos = [perfil && perfil.email_contacto, usuario && usuario.email];
+    const candidatos = [
+      perfil && perfil.email_contacto,
+      usuario && !usuario.isAnonymous ? usuario.email : null,
+    ];
     const emailDestino = candidatos.find(emailUsable) || null;
 
     const { results: subs } = await db.prepare(
