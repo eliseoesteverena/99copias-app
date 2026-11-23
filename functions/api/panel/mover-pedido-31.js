@@ -117,6 +117,27 @@ export async function onRequestGet({ request, env }) {
   }
   const base = `${url.origin}${url.pathname}?s=${encodeURIComponent(secreto)}`;
 
+  // Diagnóstico: qué ve realmente el binding BUCKET
+  if (url.searchParams.get('listar') === '1') {
+    const prefijo = 'staging/b1eabb53-e867-48bf-a434-7361aa8123eb/';
+    const raiz = await env.BUCKET.list({ delimiter: '/', limit: 50 });
+    const claves = [];
+    let cursor;
+    do {
+      const r = await env.BUCKET.list({ prefix: prefijo, cursor, limit: 1000 });
+      claves.push(...r.objects.map(o => o.key));
+      cursor = r.truncated ? r.cursor : undefined;
+    } while (cursor);
+    const set = new Set(claves);
+    const sinMatch = MANIFEST.filter(([v]) => !set.has(v)).map(([v]) => v);
+    return html(
+      `<p><b>Carpetas en la raíz del bucket:</b><br>${(raiz.delimitedPrefixes || []).join('<br>') || '(ninguna)'}<br>Objetos sueltos en raíz: ${raiz.objects.length}</p>` +
+      `<p><b>Objetos bajo la sesión:</b> ${claves.length} (el manifest espera ${MANIFEST.length})<br>` +
+      `<b>Del manifest sin coincidencia exacta:</b> ${sinMatch.length}</p>` +
+      `<p><b>Primeras keys reales (JSON, muestra caracteres ocultos):</b><br>${claves.slice(0, 5).map(k => JSON.stringify(k)).join('<br>') || '(ninguna)'}</p>` +
+      `<p><b>Primera key esperada:</b><br>${JSON.stringify(MANIFEST[0][0])}</p>`);
+  }
+
   // Verificación final: ¿existen los 94 destinos?
   if (url.searchParams.get('verificar') === '1') {
     const faltan = [];
