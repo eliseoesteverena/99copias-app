@@ -128,10 +128,16 @@ export async function onRequestGet({ request, env }) {
       claves.push(...r.objects.map(o => o.key));
       cursor = r.truncated ? r.cursor : undefined;
     } while (cursor);
+    const sesion = 'b1eabb53-e867-48bf-a434-7361aa8123eb/';
+    const enRaiz = await env.BUCKET.list({ prefix: sesion, limit: 5 });
+    const stg = await env.BUCKET.list({ prefix: 'staging/', delimiter: '/', limit: 50 });
     const set = new Set(claves);
     const sinMatch = MANIFEST.filter(([v]) => !set.has(v)).map(([v]) => v);
     return html(
       `<p><b>Carpetas en la raíz del bucket:</b><br>${(raiz.delimitedPrefixes || []).join('<br>') || '(ninguna)'}<br>Objetos sueltos en raíz: ${raiz.objects.length}</p>` +
+      `<p><b>Versión: diagnóstico v2</b></p>` +
+      `<p><b>Subcarpetas dentro de staging/:</b> ${(stg.delimitedPrefixes || []).length}<br>${(stg.delimitedPrefixes || []).slice(0, 10).join('<br>') || '(ninguna)'}</p>` +
+      `<p><b>¿Existe la sesión SIN el prefijo staging/ (en la raíz)?</b> ${enRaiz.objects.length ? 'SÍ: ' + enRaiz.objects.slice(0, 3).map(o => JSON.stringify(o.key)).join(', ') : 'no'}</p>` +
       `<p><b>Objetos bajo la sesión:</b> ${claves.length} (el manifest espera ${MANIFEST.length})<br>` +
       `<b>Del manifest sin coincidencia exacta:</b> ${sinMatch.length}</p>` +
       `<p><b>Primeras keys reales (JSON, muestra caracteres ocultos):</b><br>${claves.slice(0, 5).map(k => JSON.stringify(k)).join('<br>') || '(ninguna)'}</p>` +
