@@ -201,13 +201,27 @@ export async function onRequestGet({ request, env }) {
     if (soloStaging.length || enNinguno.length || ambiguos.length) {
       return html(`⛔ No se actualizó nada: todavía hay ${soloStaging.length} sin copiar, ${enNinguno.length} sin encontrar y ${ambiguos.length} ambiguos. Corré primero <a href="${base}&estado=1">estado</a>.`, 409);
     }
-    const finales = cl.map(c => c.enTrabajos);
-    const sets = finales.map((_, i) => `'$.archivos[${i}].r2_key', ?`).join(', ');
-    const fila = await env.DB.prepare('SELECT configuracion FROM trabajos WHERE id = ?').bind(PEDIDO).first();
-    const n = fila ? (JSON.parse(fila.configuracion).archivos || []).length : -1;
-    if (n !== MANIFEST.length) return html(`⛔ El pedido ${PEDIDO} tiene ${n} archivos en configuracion y el manifest ${MANIFEST.length}. No se tocó nada.`, 409);
-    const r = await env.DB.prepare(`UPDATE trabajos SET configuracion = json_set(configuracion, ${sets}) WHERE id = ?`).bind(...finales, PEDIDO).run();
-    return html(`✅ Actualizado (filas: ${r.meta?.changes ?? '?'}). Probá abrir un archivo y el .zip desde el Panel. Después borrá este archivo del repo.`);
+    try {
+      const finales = cl.map(c => c.enTrabajos);
+      const fila = await env.DB.prepare('SELECT configuracion FROM trabajos WHERE id = ?').bind(PEDIDO).first();
+      const n = fila ? (JSON.parse(fila.configuracion).archivos || []).length : -1;
+      if (n !== MANIFEST.length) return html(`⛔ El pedido ${PEDIDO} tiene ${n} archivos en configuracion y el manifest ${MANIFEST.length}. No se tocó nada.`, 409);
+      // SQLite limita los argumentos por función: se parte en varios json_set de 25 pares, en un batch atómico.
+      const POR_STMT = 25;
+      const stmts = [];
+      for (let ini = 0; ini < finales.length; ini += POR_STMT) {
+        const trozo = finales.slice(ini, ini + POR_STMT);
+        const sets = trozo.map((_, j) => `'$.archivos[${ini + j}].r2_key', ?`).join(', ');
+        stmts.push(env.DB.prepare(`UPDATE trabajos SET configuracion = json_set(configuracion, ${sets}) WHERE id = ?`).bind(...trozo, PEDIDO));
+      }
+      await env.DB.batch(stmts);
+      const chk = await env.DB.prepare(
+        `SELECT SUM(json_extract(a.value,'$.r2_key') LIKE ?) AS ok, COUNT(*) AS total FROM trabajos t, json_each(t.configuracion,'$.archivos') a WHERE t.id = ?`
+      ).bind(`trabajos/${PEDIDO}/%`, PEDIDO).first();
+      return html(`✅ Actualizado en ${stmts.length} partes. Verificación: ${chk.ok} de ${chk.total} con key trabajos/${PEDIDO}/. Probá abrir un archivo y el .zip desde el Panel. Después borrá este archivo del repo.`);
+    } catch (e) {
+      return html(`❌ Error al actualizar (no se aplicó nada, el batch es atómico):<br>${esc(e.message)}`, 500);
+    }
   }
 
   return html(`Modos: <a href="${base}&estado=1">estado (solo lectura)</a>`);
